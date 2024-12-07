@@ -1,13 +1,14 @@
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::prelude::Rect;
+use ratatui::widgets::ScrollbarState;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
 use crate::{
     action::Action,
-    components::{fps::FpsCounter, examination::Examination, Component},
+    components::{examination::Examination, fps::FpsCounter, Component},
     config::Config,
     tui::{Event, Tui},
 };
@@ -37,7 +38,10 @@ impl App {
         Ok(Self {
             tick_rate,
             frame_rate,
-            components: vec![Box::new(Examination::new()), Box::new(FpsCounter::default())],
+            components: vec![
+                Box::new(Examination::new()),
+                Box::new(FpsCounter::default()),
+            ],
             should_quit: false,
             should_suspend: false,
             config: Config::new()?,

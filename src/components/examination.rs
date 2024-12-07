@@ -1,16 +1,24 @@
-use color_eyre::owo_colors::OwoColorize;
-use color_eyre::Result;
-use ratatui::style::Styled;
-use ratatui::{prelude::*, widgets::*};
-use tokio::sync::mpsc::UnboundedSender;
-
 use super::Component;
 use crate::{action::Action, config::Config};
+use color_eyre::owo_colors::OwoColorize;
+use color_eyre::Result;
+use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::*;
+use ratatui::Frame;
+use tokio::sync::mpsc::UnboundedSender;
+use tracing::info;
 
 #[derive(Default)]
 pub struct Examination {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
+    pub vertical_scroll_state: ScrollbarState,
+    pub horizontal_scroll_state: ScrollbarState,
+    pub vertical_scroll: usize,
+    pub horizontal_scroll: usize,
 }
 
 impl Examination {
@@ -34,7 +42,7 @@ impl SingleSelectQuestion {
         1u16
     }
 
-    fn option_length(option: &str) -> u16 {
+    fn option_length(_option: &str) -> u16 {
         1u16
     }
 }
@@ -48,6 +56,36 @@ impl Component for Examination {
     fn register_config_handler(&mut self, config: Config) -> Result<()> {
         self.config = config;
         Ok(())
+    }
+
+    fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
+        info!("Received key event: {:?}", key);
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.vertical_scroll = self.vertical_scroll.saturating_add(1);
+                self.vertical_scroll_state =
+                    self.vertical_scroll_state.position(self.vertical_scroll);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
+                self.vertical_scroll_state =
+                    self.vertical_scroll_state.position(self.vertical_scroll);
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                self.horizontal_scroll = self.horizontal_scroll.saturating_sub(1);
+                self.horizontal_scroll_state = self
+                    .horizontal_scroll_state
+                    .position(self.horizontal_scroll);
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                self.horizontal_scroll = self.horizontal_scroll.saturating_add(1);
+                self.horizontal_scroll_state = self
+                    .horizontal_scroll_state
+                    .position(self.horizontal_scroll);
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
@@ -73,9 +111,89 @@ impl Component for Examination {
             .title_alignment(Alignment::Center)
             .style(Style::default().fg(Color::Gray));
         let area = sub_rect(0, 60, 0, 100, area);
-        frame.render_widget(block, area);
+        // frame.render_widget(block, area);
 
         let questions = vec![
+            SingleSelectQuestion {
+                question: "北京奥运会于（ ）年举办".to_string(),
+                options: vec![
+                    "A：1998".to_string(),
+                    "B: 2008".to_string(),
+                    "C: 2018".to_string(),
+                    "D: 2020".to_string(),
+                ],
+                answer: "B".to_string(),
+            },
+            SingleSelectQuestion {
+                question: "北京冬奥会于（ ）年举办".to_string(),
+                options: vec![
+                    "A：1992".to_string(),
+                    "B: 2002".to_string(),
+                    "C: 2012".to_string(),
+                    "D: 2022".to_string(),
+                ],
+                answer: "D".to_string(),
+            },
+            SingleSelectQuestion {
+                question: "北京奥运会于（ ）年举办".to_string(),
+                options: vec![
+                    "A：1998".to_string(),
+                    "B: 2008".to_string(),
+                    "C: 2018".to_string(),
+                    "D: 2020".to_string(),
+                ],
+                answer: "B".to_string(),
+            },
+            SingleSelectQuestion {
+                question: "北京冬奥会于（ ）年举办".to_string(),
+                options: vec![
+                    "A：1992".to_string(),
+                    "B: 2002".to_string(),
+                    "C: 2012".to_string(),
+                    "D: 2022".to_string(),
+                ],
+                answer: "D".to_string(),
+            },
+            SingleSelectQuestion {
+                question: "北京奥运会于（ ）年举办".to_string(),
+                options: vec![
+                    "A：1998".to_string(),
+                    "B: 2008".to_string(),
+                    "C: 2018".to_string(),
+                    "D: 2020".to_string(),
+                ],
+                answer: "B".to_string(),
+            },
+            SingleSelectQuestion {
+                question: "北京冬奥会于（ ）年举办".to_string(),
+                options: vec![
+                    "A：1992".to_string(),
+                    "B: 2002".to_string(),
+                    "C: 2012".to_string(),
+                    "D: 2022".to_string(),
+                ],
+                answer: "D".to_string(),
+            },
+            SingleSelectQuestion {
+                question: "北京奥运会于（ ）年举办".to_string(),
+                options: vec![
+                    "A：1998".to_string(),
+                    "B: 2008".to_string(),
+                    "C: 2018".to_string(),
+                    "D: 2020".to_string(),
+                ],
+                answer: "B".to_string(),
+            },
+            SingleSelectQuestion {
+                question: "北京冬奥会于（ ）年举办".to_string(),
+                options: vec![
+                    "A：1992".to_string(),
+                    "B: 2002".to_string(),
+                    "C: 2012".to_string(),
+                    "D: 2022".to_string(),
+                ],
+                answer: "D".to_string(),
+            },
             SingleSelectQuestion {
                 question: "北京奥运会于（ ）年举办".to_string(),
                 options: vec![
@@ -99,32 +217,28 @@ impl Component for Examination {
         ];
 
         let mut area = sub_rect(5, 90, 5, 90, area);
+        let mut text = vec![];
         for (index, q) in questions.iter().enumerate() {
-            let (total_area, remain) = split_rect(q.cal_total_length(), area);
-            area = remain;
-            let (q_area, remain) = split_rect(q.question_length(), total_area);
-            let mut option_area = remain;
-            let mut options = Vec::new();
+            // let question = format!("{}. {}", index + 1, q.question.clone()).as_str(); // TODO 此处如何修改？
+            text.push(Line::from(q.question.as_str()));
             for option in &q.options {
-                let (op_area, remain) = split_rect(
-                    SingleSelectQuestion::option_length(option.as_str()),
-                    option_area,
-                );
-                options.push((option.as_str(), op_area));
-                option_area = remain;
-            }
-            frame.render_widget(
-                Paragraph::new(format!("{}. {}", index + 1, q.question.clone()))
-                    .style(Style::default().fg(Color::Blue)),
-                q_area,
-            );
-            for (option, area) in options {
-                frame.render_widget(
-                    Paragraph::new(option).style(Style::default().fg(Color::Blue)),
-                    area,
-                )
+                text.push(Line::from(option.as_str()));
             }
         }
+        self.vertical_scroll_state = self.vertical_scroll_state.content_length(text.len());
+        self.horizontal_scroll_state = self.horizontal_scroll_state.content_length(100);
+        let paragraph = Paragraph::new(text.clone())
+            .gray()
+            .block(block)
+            .scroll((self.vertical_scroll as u16, 0));
+        frame.render_widget(paragraph, area);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓")),
+            area,
+            &mut self.vertical_scroll_state,
+        );
         Ok(())
     }
 }

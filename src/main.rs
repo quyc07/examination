@@ -1,8 +1,7 @@
+use crate::app::App;
 use clap::Parser;
 use cli::Cli;
 use color_eyre::Result;
-
-use crate::app::App;
 
 mod action;
 mod app;
