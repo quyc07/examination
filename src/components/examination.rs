@@ -1,13 +1,18 @@
+mod question;
+
 use super::Component;
+use crate::components::examination::question::{Questions, SelectQuestion};
+use crate::components::user_input::{InputMode, UserInput};
 use crate::{action::Action, config::Config};
 use color_eyre::owo_colors::OwoColorize;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
-use ratatui::text::{Line, Span};
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::*;
 use ratatui::Frame;
+use std::ops::Deref;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::info;
 
@@ -15,35 +20,16 @@ use tracing::info;
 pub struct Examination {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
-    pub vertical_scroll_state: ScrollbarState,
-    pub horizontal_scroll_state: ScrollbarState,
-    pub vertical_scroll: usize,
-    pub horizontal_scroll: usize,
+    state: ListState,
+    questions: Questions<SelectQuestion>,
+    input_mode: InputMode,
 }
 
 impl Examination {
     pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-struct SingleSelectQuestion {
-    question: String,
-    options: Vec<String>,
-    answer: String,
-}
-
-impl SingleSelectQuestion {
-    // TODO 需要考虑题目和选项长度，是否需要折行
-    fn cal_total_length(&self) -> u16 {
-        (self.options.len() + 1) as u16
-    }
-    fn question_length(&self) -> u16 {
-        1u16
-    }
-
-    fn option_length(_option: &str) -> u16 {
-        1u16
+        let mut examination = Self::default();
+        examination.state.select_first();
+        examination
     }
 }
 
@@ -61,28 +47,14 @@ impl Component for Examination {
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         info!("Received key event: {:?}", key);
         match key.code {
-            KeyCode::Char('j') | KeyCode::Down => {
-                self.vertical_scroll = self.vertical_scroll.saturating_add(1);
-                self.vertical_scroll_state =
-                    self.vertical_scroll_state.position(self.vertical_scroll);
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
-                self.vertical_scroll_state =
-                    self.vertical_scroll_state.position(self.vertical_scroll);
-            }
+            KeyCode::Char('j') | KeyCode::Down => self.state.select_next(),
+            KeyCode::Char('k') | KeyCode::Up => self.state.select_previous(),
             KeyCode::Char('h') | KeyCode::Left => {
-                self.horizontal_scroll = self.horizontal_scroll.saturating_sub(1);
-                self.horizontal_scroll_state = self
-                    .horizontal_scroll_state
-                    .position(self.horizontal_scroll);
+                // let question: SelectQuestion = self.questions.0[self.state.selected()];
+                // TODO 关闭弹框，并显示用户输入的答案
             }
-            KeyCode::Char('l') | KeyCode::Right => {
-                self.horizontal_scroll = self.horizontal_scroll.saturating_add(1);
-                self.horizontal_scroll_state = self
-                    .horizontal_scroll_state
-                    .position(self.horizontal_scroll);
-            }
+            KeyCode::Char('l') | KeyCode::Right => self.input_mode = InputMode::Editing,
+            // TODO 弹框请用户输入答案
             _ => {}
         }
         Ok(None)
@@ -111,134 +83,15 @@ impl Component for Examination {
             .title_alignment(Alignment::Center)
             .style(Style::default().fg(Color::Gray));
         let area = sub_rect(0, 60, 0, 100, area);
-        // frame.render_widget(block, area);
 
-        let questions = vec![
-            SingleSelectQuestion {
-                question: "北京奥运会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1998".to_string(),
-                    "B: 2008".to_string(),
-                    "C: 2018".to_string(),
-                    "D: 2020".to_string(),
-                ],
-                answer: "B".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京冬奥会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1992".to_string(),
-                    "B: 2002".to_string(),
-                    "C: 2012".to_string(),
-                    "D: 2022".to_string(),
-                ],
-                answer: "D".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京奥运会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1998".to_string(),
-                    "B: 2008".to_string(),
-                    "C: 2018".to_string(),
-                    "D: 2020".to_string(),
-                ],
-                answer: "B".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京冬奥会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1992".to_string(),
-                    "B: 2002".to_string(),
-                    "C: 2012".to_string(),
-                    "D: 2022".to_string(),
-                ],
-                answer: "D".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京奥运会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1998".to_string(),
-                    "B: 2008".to_string(),
-                    "C: 2018".to_string(),
-                    "D: 2020".to_string(),
-                ],
-                answer: "B".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京冬奥会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1992".to_string(),
-                    "B: 2002".to_string(),
-                    "C: 2012".to_string(),
-                    "D: 2022".to_string(),
-                ],
-                answer: "D".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京奥运会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1998".to_string(),
-                    "B: 2008".to_string(),
-                    "C: 2018".to_string(),
-                    "D: 2020".to_string(),
-                ],
-                answer: "B".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京冬奥会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1992".to_string(),
-                    "B: 2002".to_string(),
-                    "C: 2012".to_string(),
-                    "D: 2022".to_string(),
-                ],
-                answer: "D".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京奥运会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1998".to_string(),
-                    "B: 2008".to_string(),
-                    "C: 2018".to_string(),
-                    "D: 2020".to_string(),
-                ],
-                answer: "B".to_string(),
-            },
-            SingleSelectQuestion {
-                question: "北京冬奥会于（ ）年举办".to_string(),
-                options: vec![
-                    "A：1992".to_string(),
-                    "B: 2002".to_string(),
-                    "C: 2012".to_string(),
-                    "D: 2022".to_string(),
-                ],
-                answer: "D".to_string(),
-            },
-        ];
+        let list = List::from_iter(&*self.questions)
+            .style(Color::White)
+            .highlight_style(Style::default().fg(Color::Green))
+            .highlight_symbol("> ")
+            .scroll_padding(1)
+            .block(block);
 
-        let mut area = sub_rect(5, 90, 5, 90, area);
-        let mut text = vec![];
-        for (index, q) in questions.iter().enumerate() {
-            // let question = format!("{}. {}", index + 1, q.question.clone()).as_str(); // TODO 此处如何修改？
-            text.push(Line::from(q.question.as_str()));
-            for option in &q.options {
-                text.push(Line::from(option.as_str()));
-            }
-        }
-        self.vertical_scroll_state = self.vertical_scroll_state.content_length(text.len());
-        self.horizontal_scroll_state = self.horizontal_scroll_state.content_length(100);
-        let paragraph = Paragraph::new(text.clone())
-            .gray()
-            .block(block)
-            .scroll((self.vertical_scroll as u16, 0));
-        frame.render_widget(paragraph, area);
-        frame.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("↑"))
-                .end_symbol(Some("↓")),
-            area,
-            &mut self.vertical_scroll_state,
-        );
+        frame.render_stateful_widget(list, area, &mut self.state);
         Ok(())
     }
 }
