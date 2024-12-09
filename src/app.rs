@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::prelude::Rect;
@@ -12,6 +14,7 @@ use crate::{
     config::Config,
     tui::{Event, Tui},
 };
+use crate::components::user_input::UserInput;
 
 pub struct App {
     config: Config,
@@ -35,11 +38,13 @@ pub enum Mode {
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
+        let (user_input_tx, user_input_rx) = mpsc::unbounded_channel();
         Ok(Self {
             tick_rate,
             frame_rate,
             components: vec![
-                Box::new(Examination::new()),
+                Box::new(UserInput::new(user_input_rx)),
+                Box::new(Examination::new(user_input_tx)),
                 Box::new(FpsCounter::default()),
             ],
             should_quit: false,

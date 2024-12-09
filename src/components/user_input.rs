@@ -5,17 +5,20 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tracing::info;
 
-#[derive(Default)]
 pub struct UserInput {
     /// Current value of the input box
-    input: String,
+    pub input: String,
     /// Position of cursor in the editor area.
-    character_index: usize,
+    pub character_index: usize,
     /// Current input mode
-    input_mode: InputMode,
+    pub input_mode: InputMode,
     /// History of recorded messages
-    message: Option<String>,
+    pub message: Option<String>,
+    /// 问题请求
+    pub question_rx: UnboundedReceiver<usize>,
 }
 
 #[derive(Default)]
@@ -52,41 +55,45 @@ impl Component for UserInput {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-        let text = match &self.message {
-            None => self.input.as_str(),
-            Some(msg) => msg.as_str(),
-        };
-        let input = Paragraph::new(text).style(match self.input_mode {
-            InputMode::Normal => Style::default(),
-            InputMode::Editing => Style::default().fg(Color::Yellow),
-        });
-        frame.render_widget(input, area);
-        match self.input_mode {
-            // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-            InputMode::Normal => {}
+        while let Ok(idx) = self.question_rx.try_recv() {
+            info!("Question #{}", idx);// TODO 为什么没有展示出来？
+            let text = match &self.message {
+                None => self.input.as_str(),
+                Some(msg) => msg.as_str(),
+            };
+            let input = Paragraph::new(text).style(match self.input_mode {
+                InputMode::Normal => Style::default(),
+                InputMode::Editing => Style::default().fg(Color::Yellow),
+            });
+            frame.render_widget(input, area);
+            match self.input_mode {
+                // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
+                InputMode::Normal => {}
 
-            // Make the cursor visible and ask ratatui to put it at the specified coordinates after
-            // rendering
-            #[allow(clippy::cast_possible_truncation)]
-            InputMode::Editing => frame.set_cursor_position(Position::new(
-                // Draw the cursor at the current position in the input field.
-                // This position is can be controlled via the left and right arrow key
-                area.x + self.character_index as u16 + 1,
-                // Move one line down, from the border to the input line
-                area.y + 1,
-            )),
+                // Make the cursor visible and ask ratatui to put it at the specified coordinates after
+                // rendering
+                #[allow(clippy::cast_possible_truncation)]
+                InputMode::Editing => frame.set_cursor_position(Position::new(
+                    // Draw the cursor at the current position in the input field.
+                    // This position is can be controlled via the left and right arrow key
+                    area.x + self.character_index as u16 + 1,
+                    // Move one line down, from the border to the input line
+                    area.y + 1,
+                )),
+            }
         }
         Ok(())
     }
 }
 
 impl UserInput {
-    const fn new() -> Self {
+    pub fn new(user_input_rx: UnboundedReceiver<usize>) -> Self {
         Self {
             input: String::new(),
             input_mode: InputMode::Normal,
             message: None,
             character_index: 0,
+            question_rx: user_input_rx,
         }
     }
 

@@ -12,7 +12,9 @@ use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::*;
 use ratatui::Frame;
+use std::cell::RefCell;
 use std::ops::Deref;
+use std::rc::Rc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::info;
 
@@ -22,13 +24,14 @@ pub struct Examination {
     config: Config,
     state: ListState,
     questions: Questions<SelectQuestion>,
-    input_mode: InputMode,
+    question_tx: Option<UnboundedSender<usize>>,
 }
 
 impl Examination {
-    pub fn new() -> Self {
+    pub fn new(question_tx: UnboundedSender<usize>) -> Self {
         let mut examination = Self::default();
         examination.state.select_first();
+        examination.question_tx = Some(question_tx);
         examination
     }
 }
@@ -50,11 +53,14 @@ impl Component for Examination {
             KeyCode::Char('j') | KeyCode::Down => self.state.select_next(),
             KeyCode::Char('k') | KeyCode::Up => self.state.select_previous(),
             KeyCode::Char('h') | KeyCode::Left => {
-                // let question: SelectQuestion = self.questions.0[self.state.selected()];
                 // TODO 关闭弹框，并显示用户输入的答案
             }
-            KeyCode::Char('l') | KeyCode::Right => self.input_mode = InputMode::Editing,
-            // TODO 弹框请用户输入答案
+            KeyCode::Char('l') | KeyCode::Right => {
+                // TODO 弹框请用户输入答案
+                let idx = self.state.selected().unwrap();
+                info!("send {idx} to user_input");
+                self.question_tx.as_ref().unwrap().send(idx)?;
+            }
             _ => {}
         }
         Ok(None)
@@ -82,7 +88,7 @@ impl Component for Examination {
             ))
             .title_alignment(Alignment::Center)
             .style(Style::default().fg(Color::Gray));
-        let area = sub_rect(0, 60, 0, 100, area);
+        let total_area = sub_rect(0, 60, 0, 100, area);
 
         let list = List::from_iter(&*self.questions)
             .style(Color::White)
@@ -90,8 +96,8 @@ impl Component for Examination {
             .highlight_symbol("> ")
             .scroll_padding(1)
             .block(block);
+        frame.render_stateful_widget(list, total_area, &mut self.state);
 
-        frame.render_stateful_widget(list, area, &mut self.state);
         Ok(())
     }
 }
@@ -100,10 +106,10 @@ pub(crate) fn total_area(frame: &mut Frame) -> Rect {
     Rect::new(0, 0, frame.area().width * 6 / 10, frame.area().height)
 }
 
-fn split_rect(length: u16, r: Rect) -> (Rect, Rect) {
+fn split_rect(percent: u16, r: Rect, direction: Direction) -> (Rect, Rect) {
     let rects = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(length), Constraint::Fill(1)])
+        .direction(direction)
+        .constraints([Constraint::Percentage(percent), Constraint::Fill(1)])
         .split(r);
     (rects[0], rects[1])
 }
@@ -133,14 +139,20 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 // ANCHOR_END: centered_rect
 
-fn sub_rect(x: u16, width: u16, y: u16, high: u16, r: Rect) -> Rect {
+fn sub_rect(
+    percent_x: u16,
+    percent_width: u16,
+    percent_y: u16,
+    percent_high: u16,
+    r: Rect,
+) -> Rect {
     // Cut the given rectangle into three vertical pieces
     let popup_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(x),
-            Constraint::Percentage(width),
-            Constraint::Percentage(100 - x - width),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage(percent_width),
+            Constraint::Percentage(100 - percent_x - percent_width),
         ])
         .split(r);
 
@@ -148,9 +160,9 @@ fn sub_rect(x: u16, width: u16, y: u16, high: u16, r: Rect) -> Rect {
     Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(y),
-            Constraint::Percentage(high),
-            Constraint::Percentage(100 - y - high),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage(percent_high),
+            Constraint::Percentage(100 - percent_y - percent_high),
         ])
         .split(popup_layout[1])[1] // Return the middle chunk
 }

@@ -3,13 +3,12 @@ use ratatui::prelude::{Line, Text};
 use crate::components::user_input::UserInput;
 
 pub struct SelectQuestion {
-    question: String,
-    options: Vec<String>,
-    answer: String,
-    user_input: UserInput,
+    pub question: String,
+    pub options: Vec<String>,
+    pub answer: String,
 }
 
-pub struct Questions<T>(Vec<T>);
+pub struct Questions<T>(pub(crate) Vec<T>);
 
 impl<T> Deref for Questions<T> {
     type Target = Vec<T>;
@@ -61,7 +60,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -72,7 +70,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京奥运会于（ ）年举办".to_string(),
@@ -83,7 +80,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -94,7 +90,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京奥运会于（ ）年举办".to_string(),
@@ -105,7 +100,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -116,7 +110,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京奥运会于（ ）年举办".to_string(),
@@ -127,7 +120,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -138,7 +130,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京奥运会于（ ）年举办".to_string(),
@@ -149,7 +140,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
-            user_input: Default::default(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -160,7 +150,6 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
-            user_input: Default::default(),
         },
     ];
     questions
