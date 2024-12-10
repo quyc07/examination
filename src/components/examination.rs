@@ -1,6 +1,7 @@
 mod question;
 
 use super::Component;
+use crate::components::area_util::{sub_rect, user_input_area};
 use crate::components::examination::question::{Questions, SelectQuestion};
 use crate::components::user_input::{InputMode, UserInput};
 use crate::{action::Action, config::Config};
@@ -15,23 +16,41 @@ use ratatui::Frame;
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::task::id;
 use tracing::info;
 
-#[derive(Default)]
+#[derive(Eq, PartialEq)]
+enum State {
+    View,
+    Input,
+}
+
 pub struct Examination {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
-    state: ListState,
+    list_state: ListState,
     questions: Questions<SelectQuestion>,
-    question_tx: Option<UnboundedSender<usize>>,
+    question_tx: UnboundedSender<String>,
+    answer_rx: UnboundedReceiver<String>,
+    state: State,
 }
 
 impl Examination {
-    pub fn new(question_tx: UnboundedSender<usize>) -> Self {
-        let mut examination = Self::default();
-        examination.state.select_first();
-        examination.question_tx = Some(question_tx);
+    pub fn new(
+        question_tx: UnboundedSender<String>,
+        answer_rx: UnboundedReceiver<String>,
+    ) -> Self {
+        let mut examination = Self {
+            command_tx: None,
+            config: Default::default(),
+            list_state: Default::default(),
+            questions: Default::default(),
+            question_tx,
+            answer_rx,
+            state: State::View,
+        };
+        examination.list_state.select_first();
         examination
     }
 }
@@ -49,19 +68,26 @@ impl Component for Examination {
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         info!("Received key event: {:?}", key);
-        match key.code {
-            KeyCode::Char('j') | KeyCode::Down => self.state.select_next(),
-            KeyCode::Char('k') | KeyCode::Up => self.state.select_previous(),
-            KeyCode::Char('h') | KeyCode::Left => {
-                // TODO 关闭弹框，并显示用户输入的答案
+        match self.state {
+            State::View => {
+                match key.code {
+                    KeyCode::Char('j') | KeyCode::Down => self.list_state.select_next(),
+                    KeyCode::Char('k') | KeyCode::Up => self.list_state.select_previous(),
+                    KeyCode::Char('h') | KeyCode::Left => {
+                        // TODO 关闭弹框，并显示用户输入的答案
+                    }
+                    KeyCode::Char('l') | KeyCode::Right => {
+                        // TODO 弹框请用户输入答案
+                        let idx = self.list_state.selected().unwrap();
+                        info!("send {idx} to user_input");
+                        let user_input = self.questions.0.get_mut(idx).unwrap().user_input.clone();
+                        self.question_tx.send(user_input)?;
+                        self.state = State::Input
+                    }
+                    _ => {}
+                }
             }
-            KeyCode::Char('l') | KeyCode::Right => {
-                // TODO 弹框请用户输入答案
-                let idx = self.state.selected().unwrap();
-                info!("send {idx} to user_input");
-                self.question_tx.as_ref().unwrap().send(idx)?;
-            }
-            _ => {}
+            State::Input => {}
         }
         Ok(None)
     }
@@ -80,6 +106,16 @@ impl Component for Examination {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
+        if let Ok(answer) = self.answer_rx.try_recv() {
+            self.state = State::View;
+            let question = self
+                .questions
+                .0
+                .get_mut(self.list_state.selected().unwrap())
+                .unwrap();
+            question.user_input = answer;
+        }
+
         let block = Block::default()
             .borders(Borders::ALL)
             .title(Span::styled(
@@ -88,7 +124,6 @@ impl Component for Examination {
             ))
             .title_alignment(Alignment::Center)
             .style(Style::default().fg(Color::Gray));
-        let total_area = sub_rect(0, 60, 0, 100, area);
 
         let list = List::from_iter(&*self.questions)
             .style(Color::White)
@@ -96,73 +131,11 @@ impl Component for Examination {
             .highlight_symbol("> ")
             .scroll_padding(1)
             .block(block);
-        frame.render_stateful_widget(list, total_area, &mut self.state);
-
+        frame.render_stateful_widget(list, area, &mut self.list_state);
         Ok(())
     }
 }
 
 pub(crate) fn total_area(frame: &mut Frame) -> Rect {
     Rect::new(0, 0, frame.area().width * 6 / 10, frame.area().height)
-}
-
-fn split_rect(percent: u16, r: Rect, direction: Direction) -> (Rect, Rect) {
-    let rects = Layout::default()
-        .direction(direction)
-        .constraints([Constraint::Percentage(percent), Constraint::Fill(1)])
-        .split(r);
-    (rects[0], rects[1])
-}
-
-// ANCHOR: centered_rect
-/// helper function to create a centered rect using up certain percentage of the available rect `r`
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    // Cut the given rectangle into three vertical pieces
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    // Then cut the middle vertical piece into three width-wise pieces
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1] // Return the middle chunk
-}
-// ANCHOR_END: centered_rect
-
-fn sub_rect(
-    percent_x: u16,
-    percent_width: u16,
-    percent_y: u16,
-    percent_high: u16,
-    r: Rect,
-) -> Rect {
-    // Cut the given rectangle into three vertical pieces
-    let popup_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage(percent_width),
-            Constraint::Percentage(100 - percent_x - percent_width),
-        ])
-        .split(r);
-
-    // Then cut the middle vertical piece into three width-wise pieces
-    Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage(percent_high),
-            Constraint::Percentage(100 - percent_y - percent_high),
-        ])
-        .split(popup_layout[1])[1] // Return the middle chunk
 }

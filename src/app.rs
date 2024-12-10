@@ -1,20 +1,20 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::prelude::Rect;
 use ratatui::widgets::ScrollbarState;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::rc::Rc;
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
+use crate::components::user_input::UserInput;
 use crate::{
     action::Action,
     components::{examination::Examination, fps::FpsCounter, Component},
     config::Config,
     tui::{Event, Tui},
 };
-use crate::components::user_input::UserInput;
 
 pub struct App {
     config: Config,
@@ -38,13 +38,15 @@ pub enum Mode {
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
-        let (user_input_tx, user_input_rx) = mpsc::unbounded_channel();
+        let (question_tx, question_rx) = mpsc::unbounded_channel();
+        let (answer_tx, answer_rx) = mpsc::unbounded_channel();
         Ok(Self {
             tick_rate,
             frame_rate,
+            // 按顺序进行组建渲染，后面的组件会覆盖前面的组件
             components: vec![
-                Box::new(UserInput::new(user_input_rx)),
-                Box::new(Examination::new(user_input_tx)),
+                Box::new(Examination::new(question_tx, answer_rx)),
+                Box::new(UserInput::new(question_rx, answer_tx)),
                 Box::new(FpsCounter::default()),
             ],
             should_quit: false,

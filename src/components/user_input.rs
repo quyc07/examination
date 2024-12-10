@@ -1,11 +1,13 @@
 use crate::action::Action;
+use crate::components::area_util::centered_rect;
 use crate::components::Component;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
-use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Style, Stylize};
-use ratatui::widgets::Paragraph;
+use ratatui::layout::{Constraint, Layout, Position, Rect};
+use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::text::{Line, Text};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::info;
 
 pub struct UserInput {
@@ -15,10 +17,12 @@ pub struct UserInput {
     pub character_index: usize,
     /// Current input mode
     pub input_mode: InputMode,
-    /// History of recorded messages
-    pub message: Option<String>,
     /// 问题请求
-    pub question_rx: UnboundedReceiver<usize>,
+    pub question_rx: UnboundedReceiver<String>,
+    /// 答案
+    pub answer_tx: UnboundedSender<String>,
+    /// 是否展示
+    pub show: bool,
 }
 
 #[derive(Default)]
@@ -30,42 +34,74 @@ pub enum InputMode {
 
 impl Component for UserInput {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
-        match self.input_mode {
-            InputMode::Normal => match key.code {
-                KeyCode::Char('e') => {
-                    self.input_mode = InputMode::Editing;
-                }
-                KeyCode::Char('q') => {
-                    return Ok(None);
-                }
-                _ => {}
-            },
-            InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Enter => self.submit_message(),
-                KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                KeyCode::Backspace => self.delete_char(),
-                KeyCode::Left => self.move_cursor_left(),
-                KeyCode::Right => self.move_cursor_right(),
-                KeyCode::Esc => self.input_mode = InputMode::Normal,
-                _ => {}
-            },
-            InputMode::Editing => {}
+        if self.show {
+            match self.input_mode {
+                InputMode::Normal => match key.code {
+                    KeyCode::Char('e') => {
+                        self.input_mode = InputMode::Editing;
+                    }
+                    KeyCode::Enter => self.submit_message(),
+                    _ => {}
+                },
+                InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
+                    KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                    KeyCode::Backspace => self.delete_char(),
+                    KeyCode::Left => self.move_cursor_left(),
+                    KeyCode::Right => self.move_cursor_right(),
+                    KeyCode::Esc => self.input_mode = InputMode::Normal,
+                    _ => {}
+                },
+                InputMode::Editing => {}
+            }
         }
         Ok(None)
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-        while let Ok(idx) = self.question_rx.try_recv() {
-            info!("Question #{}", idx);// TODO 为什么没有展示出来？
-            let text = match &self.message {
-                None => self.input.as_str(),
-                Some(msg) => msg.as_str(),
+        if !self.show {
+            if let Ok(user_input) = self.question_rx.try_recv() {
+                info!("Question #{}", user_input);
+                self.input = user_input;
+                self.show = true;
+            }
+        } else {
+            let area = centered_rect(50, 30, area);
+            // frame.render_widget(Clear, area);
+            let vertical = Layout::vertical([
+                Constraint::Length(1),
+                Constraint::Length(3),
+                Constraint::Fill(1),
+            ]);
+            let [help_area, input_area, other] = vertical.areas(area);
+
+            let (msg, style) = match self.input_mode {
+                InputMode::Normal => (
+                    vec![
+                        "Press ".into(),
+                        "e".bold(),
+                        " to exit, ".into(),
+                        "Enter".bold(),
+                        " to submit answer. ".bold(),
+                    ],
+                    Style::default().add_modifier(Modifier::RAPID_BLINK),
+                ),
+                InputMode::Editing => (
+                    vec!["Press ".into(), "Esc".bold(), " to stop editing. ".into()],
+                    Style::default(),
+                ),
             };
-            let input = Paragraph::new(text).style(match self.input_mode {
-                InputMode::Normal => Style::default(),
-                InputMode::Editing => Style::default().fg(Color::Yellow),
-            });
-            frame.render_widget(input, area);
+            let text = Text::from(Line::from(msg)).patch_style(style);
+            let help_message = Paragraph::new(text);
+
+            frame.render_widget(help_message, help_area);
+
+            let input = Paragraph::new(self.input.as_str())
+                .style(match self.input_mode {
+                    InputMode::Normal => Style::default(),
+                    InputMode::Editing => Style::default().fg(Color::Yellow),
+                })
+                .block(Block::default().borders(Borders::ALL));
+            frame.render_widget(input, input_area);
             match self.input_mode {
                 // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
                 InputMode::Normal => {}
@@ -78,7 +114,7 @@ impl Component for UserInput {
                     // This position is can be controlled via the left and right arrow key
                     area.x + self.character_index as u16 + 1,
                     // Move one line down, from the border to the input line
-                    area.y + 1,
+                    area.y + 2,
                 )),
             }
         }
@@ -87,13 +123,14 @@ impl Component for UserInput {
 }
 
 impl UserInput {
-    pub fn new(user_input_rx: UnboundedReceiver<usize>) -> Self {
+    pub fn new(question_rx: UnboundedReceiver<String>, answer_tx: UnboundedSender<String>) -> Self {
         Self {
             input: String::new(),
             input_mode: InputMode::Normal,
-            message: None,
             character_index: 0,
-            question_rx: user_input_rx,
+            question_rx,
+            answer_tx,
+            show: false,
         }
     }
 
@@ -156,8 +193,14 @@ impl UserInput {
     }
 
     fn submit_message(&mut self) {
-        self.message = Some(self.input.clone());
+        self.answer_tx.send(self.input.clone()).unwrap();
+        self.reset()
+    }
+
+    fn reset(&mut self) {
         self.input.clear();
+        self.input_mode = InputMode::Normal;
         self.reset_cursor();
+        self.show = false;
     }
 }

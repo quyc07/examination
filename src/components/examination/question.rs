@@ -1,11 +1,11 @@
-use std::ops::Deref;
 use ratatui::prelude::{Line, Text};
-use crate::components::user_input::UserInput;
+use std::ops::Deref;
 
 pub struct SelectQuestion {
     pub question: String,
     pub options: Vec<String>,
     pub answer: String,
+    pub user_input: String,
 }
 
 pub struct Questions<T>(pub(crate) Vec<T>);
@@ -39,10 +39,15 @@ impl SelectQuestion {
 }
 
 impl<'a> From<&SelectQuestion> for Text<'a> {
-    fn from(question: &SelectQuestion) -> Self {
+    fn from(q: &SelectQuestion) -> Self {
         let mut text = vec![];
-        text.push(Line::from(question.question.clone()));
-        for option in &question.options {
+        let mut question = q.question.clone();
+        if !q.user_input.is_empty() {
+            let answer = format!("（{}）", q.user_input);
+            question = question.replace("（ ）", answer.as_str());
+        }
+        text.push(Line::from(question));
+        for option in &q.options {
             text.push(Line::from(option.clone()));
         }
         Text::from(text)
@@ -60,6 +65,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -70,6 +76,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京奥运会于（ ）年举办".to_string(),
@@ -80,6 +87,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -90,6 +98,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京奥运会于（ ）年举办".to_string(),
@@ -100,6 +109,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -110,6 +120,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京奥运会于（ ）年举办".to_string(),
@@ -120,6 +131,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -130,6 +142,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京奥运会于（ ）年举办".to_string(),
@@ -140,6 +153,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2020".to_string(),
             ],
             answer: "B".to_string(),
+            user_input: "".to_string(),
         },
         SelectQuestion {
             question: "北京冬奥会于（ ）年举办".to_string(),
@@ -150,6 +164,7 @@ fn load_questions() -> Vec<SelectQuestion> {
                 "D: 2022".to_string(),
             ],
             answer: "D".to_string(),
+            user_input: "".to_string(),
         },
     ];
     questions
