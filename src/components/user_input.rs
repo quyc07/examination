@@ -13,10 +13,10 @@ use tracing::info;
 pub struct UserInput {
     /// Current value of the input box
     pub input: String,
+    /// 加载组件时带入的用户输入
+    pub origin_input: String,
     /// Position of cursor in the editor area.
     pub character_index: usize,
-    /// Current input mode
-    pub input_mode: InputMode,
     /// 问题请求
     pub question_rx: UnboundedReceiver<String>,
     /// 答案
@@ -25,33 +25,17 @@ pub struct UserInput {
     pub show: bool,
 }
 
-#[derive(Default)]
-pub enum InputMode {
-    #[default]
-    Normal,
-    Editing,
-}
-
 impl Component for UserInput {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
         if self.show {
-            match self.input_mode {
-                InputMode::Normal => match key.code {
-                    KeyCode::Char('e') => {
-                        self.input_mode = InputMode::Editing;
-                    }
-                    KeyCode::Enter => self.submit_message(),
-                    _ => {}
-                },
-                InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                    KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                    KeyCode::Backspace => self.delete_char(),
-                    KeyCode::Left => self.move_cursor_left(),
-                    KeyCode::Right => self.move_cursor_right(),
-                    KeyCode::Esc => self.input_mode = InputMode::Normal,
-                    _ => {}
-                },
-                InputMode::Editing => {}
+            match key.code {
+                KeyCode::Enter => self.submit_message(),
+                KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                KeyCode::Backspace => self.delete_char(),
+                KeyCode::Left => self.move_cursor_left(),
+                KeyCode::Right => self.move_cursor_right(),
+                KeyCode::Esc => self.close(),
+                _ => {}
             }
         }
         Ok(None)
@@ -60,13 +44,12 @@ impl Component for UserInput {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
         if !self.show {
             if let Ok(user_input) = self.question_rx.try_recv() {
-                info!("Question #{}", user_input);
-                self.input = user_input;
+                self.input = user_input.clone();
+                self.origin_input = user_input;
                 self.show = true;
             }
         } else {
             let area = centered_rect(50, 30, area);
-            // frame.render_widget(Clear, area);
             let vertical = Layout::vertical([
                 Constraint::Length(1),
                 Constraint::Length(3),
@@ -74,49 +57,26 @@ impl Component for UserInput {
             ]);
             let [help_area, input_area, other] = vertical.areas(area);
 
-            let (msg, style) = match self.input_mode {
-                InputMode::Normal => (
-                    vec![
-                        "Press ".into(),
-                        "e".bold(),
-                        " to exit, ".into(),
-                        "Enter".bold(),
-                        " to submit answer. ".bold(),
-                    ],
-                    Style::default().add_modifier(Modifier::RAPID_BLINK),
-                ),
-                InputMode::Editing => (
-                    vec!["Press ".into(), "Esc".bold(), " to stop editing. ".into()],
-                    Style::default(),
-                ),
-            };
+            let (msg, style) = (
+                vec!["Press Esc to stop exist, Press Enter to submit answer.".into()],
+                Style::default(),
+            );
             let text = Text::from(Line::from(msg)).patch_style(style);
             let help_message = Paragraph::new(text);
-
+            //
             frame.render_widget(help_message, help_area);
 
             let input = Paragraph::new(self.input.as_str())
-                .style(match self.input_mode {
-                    InputMode::Normal => Style::default(),
-                    InputMode::Editing => Style::default().fg(Color::Yellow),
-                })
+                .style(Style::default().fg(Color::Yellow))
                 .block(Block::default().borders(Borders::ALL));
             frame.render_widget(input, input_area);
-            match self.input_mode {
-                // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-                InputMode::Normal => {}
-
-                // Make the cursor visible and ask ratatui to put it at the specified coordinates after
-                // rendering
-                #[allow(clippy::cast_possible_truncation)]
-                InputMode::Editing => frame.set_cursor_position(Position::new(
-                    // Draw the cursor at the current position in the input field.
-                    // This position is can be controlled via the left and right arrow key
-                    area.x + self.character_index as u16 + 1,
-                    // Move one line down, from the border to the input line
-                    area.y + 2,
-                )),
-            }
+            frame.set_cursor_position(Position::new(
+                // Draw the cursor at the current position in the input field.
+                // This position is can be controlled via the left and right arrow key
+                area.x + self.character_index as u16 + 1,
+                // Move one line down, from the border to the input line
+                area.y + 2,
+            ))
         }
         Ok(())
     }
@@ -126,7 +86,7 @@ impl UserInput {
     pub fn new(question_rx: UnboundedReceiver<String>, answer_tx: UnboundedSender<String>) -> Self {
         Self {
             input: String::new(),
-            input_mode: InputMode::Normal,
+            origin_input: String::new(),
             character_index: 0,
             question_rx,
             answer_tx,
@@ -199,8 +159,13 @@ impl UserInput {
 
     fn reset(&mut self) {
         self.input.clear();
-        self.input_mode = InputMode::Normal;
+        self.origin_input.clear();
         self.reset_cursor();
         self.show = false;
+    }
+
+    fn close(&mut self) {
+        self.answer_tx.send(self.origin_input.clone()).unwrap();
+        self.reset()
     }
 }

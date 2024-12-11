@@ -3,7 +3,7 @@ mod question;
 use super::Component;
 use crate::components::area_util::{sub_rect, user_input_area};
 use crate::components::examination::question::{Questions, SelectQuestion};
-use crate::components::user_input::{InputMode, UserInput};
+use crate::components::user_input::UserInput;
 use crate::{action::Action, config::Config};
 use color_eyre::owo_colors::OwoColorize;
 use color_eyre::Result;
@@ -37,10 +37,7 @@ pub struct Examination {
 }
 
 impl Examination {
-    pub fn new(
-        question_tx: UnboundedSender<String>,
-        answer_rx: UnboundedReceiver<String>,
-    ) -> Self {
+    pub fn new(question_tx: UnboundedSender<String>, answer_rx: UnboundedReceiver<String>) -> Self {
         let mut examination = Self {
             command_tx: None,
             config: Default::default(),
