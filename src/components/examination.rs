@@ -1,30 +1,21 @@
 mod question;
 
 use super::Component;
-use crate::components::area_util::{sub_rect, user_input_area};
+use crate::app::{State, StateHolder};
 use crate::components::examination::question::{Questions, SelectQuestion};
-use crate::components::user_input::UserInput;
 use crate::{action::Action, config::Config};
 use color_eyre::owo_colors::OwoColorize;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
-use ratatui::text::{Line, Span, Text};
+use ratatui::text::Span;
 use ratatui::widgets::*;
 use ratatui::Frame;
-use std::cell::RefCell;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::task::id;
 use tracing::info;
-
-#[derive(Eq, PartialEq)]
-enum State {
-    View,
-    Input,
-}
 
 pub struct Examination {
     command_tx: Option<UnboundedSender<Action>>,
@@ -33,11 +24,15 @@ pub struct Examination {
     questions: Questions<SelectQuestion>,
     question_tx: UnboundedSender<String>,
     answer_rx: UnboundedReceiver<String>,
-    state: State,
+    state_holder: Arc<Mutex<StateHolder>>,
 }
 
 impl Examination {
-    pub fn new(question_tx: UnboundedSender<String>, answer_rx: UnboundedReceiver<String>) -> Self {
+    pub fn new(
+        question_tx: UnboundedSender<String>,
+        answer_rx: UnboundedReceiver<String>,
+        state_holder: Arc<Mutex<StateHolder>>,
+    ) -> Self {
         let mut examination = Self {
             command_tx: None,
             config: Default::default(),
@@ -45,7 +40,7 @@ impl Examination {
             questions: Default::default(),
             question_tx,
             answer_rx,
-            state: State::View,
+            state_holder,
         };
         examination.list_state.select_first();
         examination
@@ -64,27 +59,23 @@ impl Component for Examination {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        info!("Received key event: {:?}", key);
-        match self.state {
+        match self.state_holder.lock().unwrap().state {
             State::View => {
                 match key.code {
                     KeyCode::Char('j') | KeyCode::Down => self.list_state.select_next(),
                     KeyCode::Char('k') | KeyCode::Up => self.list_state.select_previous(),
-                    KeyCode::Char('h') | KeyCode::Left => {
-                        // TODO 关闭弹框，并显示用户输入的答案
-                    }
                     KeyCode::Char('l') | KeyCode::Right => {
-                        // TODO 弹框请用户输入答案
+                        // 弹框请用户输入答案
                         let idx = self.list_state.selected().unwrap();
                         info!("send {idx} to user_input");
                         let user_input = self.questions.0.get_mut(idx).unwrap().user_input.clone();
-                        self.question_tx.send(user_input)?;
-                        self.state = State::Input
+                        self.question_tx.send(user_input).unwrap();
                     }
                     _ => {}
                 }
             }
             State::Input => {}
+            State::Submit => {}
         }
         Ok(None)
     }
@@ -104,7 +95,7 @@ impl Component for Examination {
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         if let Ok(answer) = self.answer_rx.try_recv() {
-            self.state = State::View;
+            self.state_holder.lock().unwrap().set_state(State::View);
             let question = self
                 .questions
                 .0
@@ -112,7 +103,6 @@ impl Component for Examination {
                 .unwrap();
             question.user_input = answer;
         }
-
         let block = Block::default()
             .borders(Borders::ALL)
             .title(Span::styled(

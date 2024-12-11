@@ -1,12 +1,14 @@
 use crate::action::Action;
+use crate::app::{State, StateHolder};
 use crate::components::area_util::centered_rect;
 use crate::components::Component;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Position, Rect};
-use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::info;
 
@@ -21,14 +23,15 @@ pub struct UserInput {
     pub question_rx: UnboundedReceiver<String>,
     /// 答案
     pub answer_tx: UnboundedSender<String>,
-    /// 是否展示
-    pub show: bool,
+    /// 全局状态
+    state_holder: Arc<Mutex<StateHolder>>,
 }
 
 impl Component for UserInput {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
-        if self.show {
-            match key.code {
+        match self.get_state() {
+            State::View => {}
+            State::Input => match key.code {
                 KeyCode::Enter => self.submit_message(),
                 KeyCode::Char(to_insert) => self.enter_char(to_insert),
                 KeyCode::Backspace => self.delete_char(),
@@ -36,62 +39,76 @@ impl Component for UserInput {
                 KeyCode::Right => self.move_cursor_right(),
                 KeyCode::Esc => self.close(),
                 _ => {}
-            }
+            },
+            State::Submit => {}
         }
         Ok(None)
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-        if !self.show {
-            if let Ok(user_input) = self.question_rx.try_recv() {
-                self.input = user_input.clone();
-                self.origin_input = user_input;
-                self.show = true;
+        match self.get_state() {
+            State::View => {
+                if let Ok(user_input) = self.question_rx.try_recv() {
+                    info!("receive {user_input}");
+                    self.input = user_input.clone();
+                    self.origin_input = user_input;
+                    self.state_holder.lock().unwrap().set_state(State::Input);
+                }
             }
-        } else {
-            let area = centered_rect(50, 30, area);
-            let vertical = Layout::vertical([
-                Constraint::Length(1),
-                Constraint::Length(3),
-                Constraint::Fill(1),
-            ]);
-            let [help_area, input_area, other] = vertical.areas(area);
+            State::Input => {
+                let area = centered_rect(50, 30, area);
+                let vertical = Layout::vertical([
+                    Constraint::Length(1),
+                    Constraint::Length(3),
+                    Constraint::Fill(1),
+                ]);
+                let [help_area, input_area, other] = vertical.areas(area);
 
-            let (msg, style) = (
-                vec!["Press Esc to stop exist, Press Enter to submit answer.".into()],
-                Style::default(),
-            );
-            let text = Text::from(Line::from(msg)).patch_style(style);
-            let help_message = Paragraph::new(text);
-            //
-            frame.render_widget(help_message, help_area);
+                let (msg, style) = (
+                    vec!["Press Esc to stop exist, Press Enter to submit answer.".into()],
+                    Style::default(),
+                );
+                let text = Text::from(Line::from(msg)).patch_style(style);
+                let help_message = Paragraph::new(text);
+                //
+                frame.render_widget(help_message, help_area);
 
-            let input = Paragraph::new(self.input.as_str())
-                .style(Style::default().fg(Color::Yellow))
-                .block(Block::default().borders(Borders::ALL));
-            frame.render_widget(input, input_area);
-            frame.set_cursor_position(Position::new(
-                // Draw the cursor at the current position in the input field.
-                // This position is can be controlled via the left and right arrow key
-                area.x + self.character_index as u16 + 1,
-                // Move one line down, from the border to the input line
-                area.y + 2,
-            ))
+                let input = Paragraph::new(self.input.as_str())
+                    .style(Style::default().fg(Color::Yellow))
+                    .block(Block::default().borders(Borders::ALL));
+                frame.render_widget(input, input_area);
+                frame.set_cursor_position(Position::new(
+                    // Draw the cursor at the current position in the input field.
+                    // This position is can be controlled via the left and right arrow key
+                    area.x + self.character_index as u16 + 1,
+                    // Move one line down, from the border to the input line
+                    area.y + 2,
+                ));
+            }
+            State::Submit => {}
         }
         Ok(())
     }
 }
 
 impl UserInput {
-    pub fn new(question_rx: UnboundedReceiver<String>, answer_tx: UnboundedSender<String>) -> Self {
+    pub fn new(
+        question_rx: UnboundedReceiver<String>,
+        answer_tx: UnboundedSender<String>,
+        state_holder: Arc<Mutex<StateHolder>>,
+    ) -> Self {
         Self {
             input: String::new(),
             origin_input: String::new(),
             character_index: 0,
             question_rx,
             answer_tx,
-            show: false,
+            state_holder,
         }
+    }
+
+    fn get_state(&self) -> State {
+        self.state_holder.lock().unwrap().state.clone()
     }
 
     fn move_cursor_left(&mut self) {
@@ -161,7 +178,6 @@ impl UserInput {
         self.input.clear();
         self.origin_input.clear();
         self.reset_cursor();
-        self.show = false;
     }
 
     fn close(&mut self) {

@@ -5,6 +5,7 @@ use ratatui::widgets::ScrollbarState;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
@@ -35,18 +36,42 @@ pub enum Mode {
     Home,
 }
 
+#[derive(Eq, PartialEq, Default, Clone)]
+pub enum State {
+    #[default]
+    View,
+    Input,
+    Submit,
+}
+
+#[derive(Default)]
+pub struct StateHolder {
+    pub state: State,
+}
+
+impl StateHolder {
+    pub fn set_state(&mut self, state: State) {
+        self.state = state;
+    }
+}
+
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         let (question_tx, question_rx) = mpsc::unbounded_channel();
         let (answer_tx, answer_rx) = mpsc::unbounded_channel();
+        let state_holder = Arc::new(Mutex::new(StateHolder::default()));
         Ok(Self {
             tick_rate,
             frame_rate,
             // 按顺序进行组建渲染，后面的组件会覆盖前面的组件
             components: vec![
-                Box::new(Examination::new(question_tx, answer_rx)),
-                Box::new(UserInput::new(question_rx, answer_tx)),
+                Box::new(Examination::new(
+                    question_tx,
+                    answer_rx,
+                    state_holder.clone(),
+                )),
+                Box::new(UserInput::new(question_rx, answer_tx, state_holder.clone())),
                 Box::new(FpsCounter::default()),
             ],
             should_quit: false,
