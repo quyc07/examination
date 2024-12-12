@@ -1,6 +1,7 @@
 mod question;
 
 use super::Component;
+use crate::action::ConfirmEvent;
 use crate::app::{Mode, ModeHolder};
 use crate::components::examination::question::{Questions, SelectQuestion};
 use crate::tui::Event;
@@ -26,6 +27,7 @@ pub struct Examination {
     question_tx: UnboundedSender<String>,
     answer_rx: UnboundedReceiver<String>,
     mode_holder: Arc<Mutex<ModeHolder>>,
+    score: Option<usize>,
 }
 
 impl Examination {
@@ -42,6 +44,7 @@ impl Examination {
             question_tx,
             answer_rx,
             mode_holder: state_holder,
+            score: None,
         };
         examination.list_state.select_first();
         examination
@@ -88,18 +91,35 @@ impl Component for Examination {
                 if let Some(_) = &self.questions.0.iter().find(|&q| q.user_input.is_empty()) {
                     return Ok(Some(Action::Alert(
                         "还有题目未做完，是否确认交卷？".to_string(),
+                        ConfirmEvent::Submit,
                     )));
                 }
-                info!("submit");
+                Ok(None)
             }
-            Action::Confirm => {
-                info!("confirm");
+            Action::Confirm(ConfirmEvent::Submit) => {
                 self.mode_holder.lock().unwrap().mode = Mode::Examination;
-                // TODO 计算得分
+                // 计算得分
+                let score = &self
+                    .questions
+                    .0
+                    .iter()
+                    .map(|q| {
+                        if q.answer.eq_ignore_ascii_case(q.user_input.as_str()) {
+                            2
+                        } else {
+                            0
+                        }
+                    })
+                    .sum::<usize>();
+                self.score = Some(*score);
+                Ok(Some(Action::Alert(
+                    format!("您的最终得分是{score}"),
+                    ConfirmEvent::Score,
+                )))
             }
-            _ => {}
+            Action::Confirm(ConfirmEvent::Score) => Ok(Some(Action::Quit)),
+            _ => Ok(None),
         }
-        Ok(None)
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {

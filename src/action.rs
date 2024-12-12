@@ -13,6 +13,13 @@ pub enum Action {
     Error(String),
     Help,
     Submit,
-    Alert(String),
-    Confirm,
+    Alert(String, ConfirmEvent),
+    Confirm(ConfirmEvent),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Display, Serialize, Deserialize)]
+pub enum ConfirmEvent {
+    Nothing,
+    Submit,
+    Score,
 }

@@ -1,4 +1,4 @@
-use crate::action::Action;
+use crate::action::{Action, ConfirmEvent};
 use crate::app::{Mode, ModeHolder};
 use crate::components::area_util::centered_rect;
 use crate::components::Component;
@@ -15,13 +15,15 @@ pub struct Alert {
     msg: String,
     /// 全局状态
     mode_holder: Arc<Mutex<ModeHolder>>,
+    /// 确认事件
+    confirm_event: ConfirmEvent,
 }
 
 impl Component for Alert {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
         match self.get_state() {
             Mode::Alert => match key.code {
-                KeyCode::Enter => Ok(Some(Action::Confirm)),
+                KeyCode::Enter => Ok(Some(Action::Confirm(self.confirm_event.clone()))),
                 KeyCode::Esc => {
                     self.close();
                     Ok(None)
@@ -34,8 +36,9 @@ impl Component for Alert {
 
     fn update(&mut self, action: Action) -> color_eyre::Result<Option<Action>> {
         match action {
-            Action::Alert(msg) => {
+            Action::Alert(msg, confirm_event) => {
                 self.msg = msg;
+                self.confirm_event = confirm_event;
                 self.mode_holder.lock().unwrap().mode = Mode::Alert
             }
             _ => {}
@@ -79,6 +82,7 @@ impl Alert {
         Self {
             msg: String::new(),
             mode_holder,
+            confirm_event: ConfirmEvent::Nothing,
         }
     }
 
