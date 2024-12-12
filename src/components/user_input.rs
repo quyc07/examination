@@ -1,5 +1,5 @@
 use crate::action::Action;
-use crate::app::{State, StateHolder};
+use crate::app::{Mode, ModeHolder};
 use crate::components::area_util::centered_rect;
 use crate::components::Component;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -14,24 +14,23 @@ use tracing::info;
 
 pub struct UserInput {
     /// Current value of the input box
-    pub input: String,
+    input: String,
     /// 加载组件时带入的用户输入
-    pub origin_input: String,
+    origin_input: String,
     /// Position of cursor in the editor area.
-    pub character_index: usize,
+    character_index: usize,
     /// 问题请求
-    pub question_rx: UnboundedReceiver<String>,
+    question_rx: UnboundedReceiver<String>,
     /// 答案
-    pub answer_tx: UnboundedSender<String>,
+    answer_tx: UnboundedSender<String>,
     /// 全局状态
-    state_holder: Arc<Mutex<StateHolder>>,
+    state_holder: Arc<Mutex<ModeHolder>>,
 }
 
 impl Component for UserInput {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
         match self.get_state() {
-            State::View => {}
-            State::Input => match key.code {
+            Mode::Input => match key.code {
                 KeyCode::Enter => self.submit_message(),
                 KeyCode::Char(to_insert) => self.enter_char(to_insert),
                 KeyCode::Backspace => self.delete_char(),
@@ -40,22 +39,22 @@ impl Component for UserInput {
                 KeyCode::Esc => self.close(),
                 _ => {}
             },
-            State::Submit => {}
+            _ => {}
         }
         Ok(None)
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
         match self.get_state() {
-            State::View => {
+            Mode::Examination => {
                 if let Ok(user_input) = self.question_rx.try_recv() {
                     info!("receive {user_input}");
                     self.input = user_input.clone();
                     self.origin_input = user_input;
-                    self.state_holder.lock().unwrap().set_state(State::Input);
+                    self.state_holder.lock().unwrap().set_mode(Mode::Input);
                 }
             }
-            State::Input => {
+            Mode::Input => {
                 let area = centered_rect(50, 30, area);
                 let vertical = Layout::vertical([
                     Constraint::Length(1),
@@ -85,7 +84,7 @@ impl Component for UserInput {
                     area.y + 2,
                 ));
             }
-            State::Submit => {}
+            _ => {}
         }
         Ok(())
     }
@@ -95,7 +94,7 @@ impl UserInput {
     pub fn new(
         question_rx: UnboundedReceiver<String>,
         answer_tx: UnboundedSender<String>,
-        state_holder: Arc<Mutex<StateHolder>>,
+        state_holder: Arc<Mutex<ModeHolder>>,
     ) -> Self {
         Self {
             input: String::new(),
@@ -107,8 +106,8 @@ impl UserInput {
         }
     }
 
-    fn get_state(&self) -> State {
-        self.state_holder.lock().unwrap().state.clone()
+    fn get_state(&self) -> Mode {
+        self.state_holder.lock().unwrap().mode.clone()
     }
 
     fn move_cursor_left(&mut self) {

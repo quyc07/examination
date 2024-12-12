@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
+use crate::components::alert::Alert;
 use crate::components::user_input::UserInput;
 use crate::{
     action::Action,
@@ -24,7 +25,7 @@ pub struct App {
     components: Vec<Box<dyn Component>>,
     should_quit: bool,
     should_suspend: bool,
-    mode: Mode,
+    mode: Arc<Mutex<ModeHolder>>,
     last_tick_key_events: Vec<KeyEvent>,
     action_tx: mpsc::UnboundedSender<Action>,
     action_rx: mpsc::UnboundedReceiver<Action>,
@@ -33,25 +34,19 @@ pub struct App {
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Mode {
     #[default]
-    Home,
-}
-
-#[derive(Eq, PartialEq, Default, Clone)]
-pub enum State {
-    #[default]
-    View,
+    Examination,
     Input,
-    Submit,
+    Alert,
 }
 
 #[derive(Default)]
-pub struct StateHolder {
-    pub state: State,
+pub struct ModeHolder {
+    pub mode: Mode,
 }
 
-impl StateHolder {
-    pub fn set_state(&mut self, state: State) {
-        self.state = state;
+impl ModeHolder {
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
     }
 }
 
@@ -60,7 +55,7 @@ impl App {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         let (question_tx, question_rx) = mpsc::unbounded_channel();
         let (answer_tx, answer_rx) = mpsc::unbounded_channel();
-        let state_holder = Arc::new(Mutex::new(StateHolder::default()));
+        let mode_holder = Arc::new(Mutex::new(ModeHolder::default()));
         Ok(Self {
             tick_rate,
             frame_rate,
@@ -69,15 +64,16 @@ impl App {
                 Box::new(Examination::new(
                     question_tx,
                     answer_rx,
-                    state_holder.clone(),
+                    mode_holder.clone(),
                 )),
-                Box::new(UserInput::new(question_rx, answer_tx, state_holder.clone())),
+                Box::new(UserInput::new(question_rx, answer_tx, mode_holder.clone())),
+                Box::new(Alert::new(mode_holder.clone())),
                 Box::new(FpsCounter::default()),
             ],
             should_quit: false,
             should_suspend: false,
             config: Config::new()?,
-            mode: Mode::Home,
+            mode: mode_holder.clone(),
             last_tick_key_events: Vec::new(),
             action_tx,
             action_rx,
@@ -143,7 +139,7 @@ impl App {
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<()> {
         let action_tx = self.action_tx.clone();
-        let Some(keymap) = self.config.keybindings.get(&self.mode) else {
+        let Some(keymap) = self.config.keybindings.get(&self.mode.lock().unwrap().mode) else {
             return Ok(());
         };
         match keymap.get(&vec![key]) {
@@ -158,7 +154,7 @@ impl App {
 
                 // Check for multi-key combinations
                 if let Some(action) = keymap.get(&self.last_tick_key_events) {
-                    info!("Got action: {action:?}");
+                    info!("Got multi-key action: {action:?}");
                     action_tx.send(action.clone())?;
                 }
             }

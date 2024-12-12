@@ -1,8 +1,9 @@
 mod question;
 
 use super::Component;
-use crate::app::{State, StateHolder};
+use crate::app::{Mode, ModeHolder};
 use crate::components::examination::question::{Questions, SelectQuestion};
+use crate::tui::Event;
 use crate::{action::Action, config::Config};
 use color_eyre::owo_colors::OwoColorize;
 use color_eyre::Result;
@@ -15,7 +16,7 @@ use ratatui::Frame;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tracing::info;
+use tracing::{info, warn};
 
 pub struct Examination {
     command_tx: Option<UnboundedSender<Action>>,
@@ -24,14 +25,14 @@ pub struct Examination {
     questions: Questions<SelectQuestion>,
     question_tx: UnboundedSender<String>,
     answer_rx: UnboundedReceiver<String>,
-    state_holder: Arc<Mutex<StateHolder>>,
+    mode_holder: Arc<Mutex<ModeHolder>>,
 }
 
 impl Examination {
     pub fn new(
         question_tx: UnboundedSender<String>,
         answer_rx: UnboundedReceiver<String>,
-        state_holder: Arc<Mutex<StateHolder>>,
+        state_holder: Arc<Mutex<ModeHolder>>,
     ) -> Self {
         let mut examination = Self {
             command_tx: None,
@@ -40,7 +41,7 @@ impl Examination {
             questions: Default::default(),
             question_tx,
             answer_rx,
-            state_holder,
+            mode_holder: state_holder,
         };
         examination.list_state.select_first();
         examination
@@ -59,8 +60,8 @@ impl Component for Examination {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        match self.state_holder.lock().unwrap().state {
-            State::View => {
+        match self.mode_holder.lock().unwrap().mode {
+            Mode::Examination => {
                 match key.code {
                     KeyCode::Char('j') | KeyCode::Down => self.list_state.select_next(),
                     KeyCode::Char('k') | KeyCode::Up => self.list_state.select_previous(),
@@ -74,19 +75,27 @@ impl Component for Examination {
                     _ => {}
                 }
             }
-            State::Input => {}
-            State::Submit => {}
+            _ => {}
         }
         Ok(None)
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::Tick => {
-                // add any logic here that should run on every tick
+            // 交卷
+            Action::Submit => {
+                // 判断是否全部题目都已经做完，否则弹框提示
+                if let Some(_) = &self.questions.0.iter().find(|&q| q.user_input.is_empty()) {
+                    return Ok(Some(Action::Alert(
+                        "还有题目未做完，是否确认交卷？".to_string(),
+                    )));
+                }
+                info!("submit");
             }
-            Action::Render => {
-                // add any logic here that should run on every render
+            Action::Confirm => {
+                info!("confirm");
+                self.mode_holder.lock().unwrap().mode = Mode::Examination;
+                // TODO 计算得分
             }
             _ => {}
         }
@@ -95,7 +104,7 @@ impl Component for Examination {
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         if let Ok(answer) = self.answer_rx.try_recv() {
-            self.state_holder.lock().unwrap().set_state(State::View);
+            self.mode_holder.lock().unwrap().set_mode(Mode::Examination);
             let question = self
                 .questions
                 .0

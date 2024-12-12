@@ -12,4 +12,7 @@ pub enum Action {
     ClearScreen,
     Error(String),
     Help,
+    Submit,
+    Alert(String),
+    Confirm,
 }
