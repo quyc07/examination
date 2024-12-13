@@ -56,6 +56,7 @@ impl App {
         let (question_tx, question_rx) = mpsc::unbounded_channel();
         let (answer_tx, answer_rx) = mpsc::unbounded_channel();
         let mode_holder = Arc::new(Mutex::new(ModeHolder::default()));
+        let config = Config::new()?;
         Ok(Self {
             tick_rate,
             frame_rate,
@@ -65,6 +66,7 @@ impl App {
                     question_tx,
                     answer_rx,
                     mode_holder.clone(),
+                    config.clone()
                 )),
                 Box::new(UserInput::new(question_rx, answer_tx, mode_holder.clone())),
                 Box::new(Alert::new(mode_holder.clone())),
@@ -72,7 +74,7 @@ impl App {
             ],
             should_quit: false,
             should_suspend: false,
-            config: Config::new()?,
+            config,
             mode: mode_holder.clone(),
             last_tick_key_events: Vec::new(),
             action_tx,

@@ -35,12 +35,13 @@ impl Examination {
         question_tx: UnboundedSender<String>,
         answer_rx: UnboundedReceiver<String>,
         state_holder: Arc<Mutex<ModeHolder>>,
+        config: Config,
     ) -> Self {
         let mut examination = Self {
             command_tx: None,
-            config: Default::default(),
+            config: config.clone(),
             list_state: Default::default(),
-            questions: Default::default(),
+            questions: Questions::load(config),
             question_tx,
             answer_rx,
             mode_holder: state_holder,

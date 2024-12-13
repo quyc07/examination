@@ -1,6 +1,11 @@
+use crate::config::Config;
 use ratatui::prelude::{Line, Text};
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Read;
 use std::ops::Deref;
 
+#[derive(Serialize, Deserialize)]
 pub struct SelectQuestion {
     pub question: String,
     pub options: Vec<String>,
@@ -9,6 +14,19 @@ pub struct SelectQuestion {
 }
 
 pub struct Questions<T>(pub(crate) Vec<T>);
+
+impl Questions<SelectQuestion> {
+    pub(crate) fn load(config: Config) -> Questions<SelectQuestion> {
+        let mut questions = String::new();
+        File::open(config.config.data_dir.join("question.json"))
+            .unwrap()
+            .read_to_string(&mut questions)
+            .expect("Fail to load question!");
+        let select_question =
+            serde_json::from_slice::<Vec<SelectQuestion>>(questions.as_ref()).unwrap();
+        Questions(select_question)
+    }
+}
 
 impl<T> Deref for Questions<T> {
     type Target = Vec<T>;
@@ -51,6 +69,18 @@ impl<'a> From<&SelectQuestion> for Text<'a> {
             text.push(Line::from(option.clone()));
         }
         Text::from(text)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::components::examination::question::load_questions;
+
+    #[test]
+    fn test() {
+        let questions = load_questions();
+        let string = serde_json::to_string(&questions).unwrap();
+        println!("{}", string);
     }
 }
 
