@@ -9,7 +9,7 @@ use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use ratatui::style::{Color, Modifier, Style};
 use serde::{de::Deserializer, Deserialize};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{action::Action, app::Mode};
 
@@ -109,7 +109,7 @@ pub fn get_config_dir() -> PathBuf {
     let directory = if let Some(s) = CONFIG_FOLDER.clone() {
         s
     } else {
-        PathBuf::from(".").join(".config")
+        env::current_dir().unwrap().join(".config")
     };
     directory
 }
