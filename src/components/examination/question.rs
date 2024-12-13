@@ -1,9 +1,12 @@
+use crate::components::examination::State;
 use crate::config::Config;
 use ratatui::prelude::{Line, Text};
+use ratatui::style::{Color, Style};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
 use std::ops::Deref;
+use std::sync::LazyLock;
 
 #[derive(Serialize, Deserialize)]
 pub struct SelectQuestion {
@@ -41,6 +44,18 @@ impl Default for Questions<SelectQuestion> {
         Questions(load_questions())
     }
 }
+const DEFAULT_STYLE: LazyLock<Style, fn() -> Style> = LazyLock::new(|| Style::default());
+const SELECT_STYLE: LazyLock<Style, fn() -> Style> =
+    LazyLock::new(|| Style::default().fg(Color::Yellow));
+const RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
+    LazyLock::new(|| Style::default().fg(Color::Green));
+const WRONG_STYLE: LazyLock<Style, fn() -> Style> =
+    LazyLock::new(|| Style::default().fg(Color::Red));
+
+// static  DEFAULT_STYLE: Style = Style::default();
+// static  SELECT_STYLE: Style = Style::default().bg(Color::Yellow);
+// static  RIGHT_STYLE: Style = Style::default().bg(Color::Green);
+// static  WRONG_STYLE: Style = Style::default().bg(Color::Red);
 
 impl SelectQuestion {
     // TODO 需要考虑题目和选项长度，是否需要折行
@@ -54,6 +69,77 @@ impl SelectQuestion {
     fn option_length(_option: &str) -> u16 {
         1u16
     }
+
+    pub(crate) fn convert_lines<'a>(&self, state: &State, i: usize) -> Text<'a> {
+        let mut lines = vec![];
+        let mut question = self.question.clone();
+        if !self.user_input.is_empty() {
+            let answer = format!("（{}）", self.user_input);
+            question = question.replace("（ ）", answer.as_str());
+        }
+        lines.push(Line::from(format!("{}: {question}", i + 1)));
+        for (i, option) in self.options.iter().enumerate() {
+            let user_input_idx = answer_to_idx(self.user_input.as_str());
+            let answer_idx = answer_to_idx(self.answer.as_str());
+            let style = Self::check_style(state, i, user_input_idx, answer_idx.unwrap());
+            lines.push(Line::from(format!("  {option}")).style(style));
+        }
+        Text::from(lines)
+    }
+
+    fn check_style(
+        state: &State,
+        i: usize,
+        user_input_idx: Option<usize>,
+        answer_idx: usize,
+    ) -> Style {
+        match user_input_idx {
+            None => *DEFAULT_STYLE,
+            Some(user_idx) => match state {
+                State::ING => {
+                    if i == user_idx {
+                        *SELECT_STYLE
+                    } else {
+                        *DEFAULT_STYLE
+                    }
+                }
+                State::END => {
+                    if user_idx == answer_idx {
+                        if i == user_idx {
+                            *RIGHT_STYLE
+                        } else {
+                            *DEFAULT_STYLE
+                        }
+                    } else {
+                        if i == user_idx {
+                            *WRONG_STYLE
+                        } else if i == answer_idx {
+                            *RIGHT_STYLE
+                        } else {
+                            *DEFAULT_STYLE
+                        }
+                    }
+                }
+            },
+        }
+    }
+}
+
+fn answer_to_idx(answer: &str) -> Option<usize> {
+    if answer.len() == 0 {
+        return None;
+    }
+    Some(match answer {
+        "A" | "a" => 0,
+        "B" | "b" => 1,
+        "C" | "c" => 2,
+        "D" | "d" => 3,
+        "E" | "e" => 4,
+        "F" | "f" => 5,
+        "G" | "g" => 6,
+        "H" | "h" => 7,
+        _ => panic!("Invalid answer"),
+    })
 }
 
 impl<'a> From<&SelectQuestion> for Text<'a> {

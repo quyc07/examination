@@ -11,7 +11,7 @@ use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
-use ratatui::text::Span;
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::*;
 use ratatui::Frame;
 use std::ops::Deref;
@@ -28,6 +28,13 @@ pub struct Examination {
     answer_rx: UnboundedReceiver<String>,
     mode_holder: Arc<Mutex<ModeHolder>>,
     score: Option<usize>,
+    state: State,
+}
+
+#[derive(Eq, PartialEq)]
+enum State {
+    ING,
+    END,
 }
 
 impl Examination {
@@ -46,9 +53,24 @@ impl Examination {
             answer_rx,
             mode_holder: state_holder,
             score: None,
+            state: State::ING,
         };
         examination.list_state.select_first();
         examination
+    }
+
+    fn cal_score(&self) -> usize {
+        self.questions
+            .0
+            .iter()
+            .map(|q| {
+                if q.answer.eq_ignore_ascii_case(q.user_input.as_str()) {
+                    2
+                } else {
+                    0
+                }
+            })
+            .sum::<usize>()
     }
 }
 
@@ -69,7 +91,7 @@ impl Component for Examination {
                 match key.code {
                     KeyCode::Char('j') | KeyCode::Down => self.list_state.select_next(),
                     KeyCode::Char('k') | KeyCode::Up => self.list_state.select_previous(),
-                    KeyCode::Char('l') | KeyCode::Right => {
+                    KeyCode::Char('l') | KeyCode::Right if self.state == State::ING => {
                         // 弹框请用户输入答案
                         let idx = self.list_state.selected().unwrap();
                         info!("send {idx} to user_input");
@@ -100,25 +122,18 @@ impl Component for Examination {
             Action::Confirm(ConfirmEvent::Submit) => {
                 self.mode_holder.lock().unwrap().mode = Mode::Examination;
                 // 计算得分
-                let score = &self
-                    .questions
-                    .0
-                    .iter()
-                    .map(|q| {
-                        if q.answer.eq_ignore_ascii_case(q.user_input.as_str()) {
-                            2
-                        } else {
-                            0
-                        }
-                    })
-                    .sum::<usize>();
-                self.score = Some(*score);
+                let score = self.cal_score();
+                self.score = Some(score);
                 Ok(Some(Action::Alert(
                     format!("您的最终得分是{score}"),
                     ConfirmEvent::Score,
                 )))
             }
-            Action::Confirm(ConfirmEvent::Score) => Ok(Some(Action::Quit)),
+            Action::Confirm(ConfirmEvent::Score) => {
+                self.state = State::END;
+                self.mode_holder.lock().unwrap().mode = Mode::Examination;
+                Ok(None)
+            }
             _ => Ok(None),
         }
     }
@@ -142,12 +157,25 @@ impl Component for Examination {
             .title_alignment(Alignment::Center)
             .style(Style::default().fg(Color::Gray));
 
-        let list = List::from_iter(&*self.questions)
-            .style(Color::White)
-            .highlight_style(Style::default().fg(Color::Green))
-            .highlight_symbol("> ")
-            .scroll_padding(1)
-            .block(block);
+        let texts = self
+            .questions
+            .iter()
+            .enumerate()
+            .map(|(i, q)| q.convert_lines(&self.state, i))
+            .collect::<Vec<Text>>();
+
+        let list = match self.state {
+            State::ING => List::from_iter(texts)
+                .style(Color::Gray)
+                .highlight_style(Style::default().fg(Color::LightBlue))
+                .highlight_symbol("> ")
+                .scroll_padding(1)
+                .block(block),
+            State::END => List::from_iter(texts)
+                .style(Color::Gray)
+                .scroll_padding(1)
+                .block(block),
+        };
         frame.render_stateful_widget(list, area, &mut self.list_state);
         Ok(())
     }
