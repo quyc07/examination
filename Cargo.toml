@@ -45,8 +45,3 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter", "serde"] }
 [build-dependencies]
 anyhow = "1.0.90"
 vergen-gix = { version = "1.0.2", features = ["build", "cargo"] }
-
-[features]
-# Force openssl-sys to staticly link in the openssl library. Necessary when
-# cross compiling to x86_64-unknown-linux-musl.
-vendored-openssl = ["openssl-sys/vendored"]
