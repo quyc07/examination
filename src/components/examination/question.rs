@@ -44,12 +44,12 @@ impl Default for Questions<SelectQuestion> {
         Questions(load_questions())
     }
 }
-const DEFAULT_STYLE: LazyLock<Style, fn() -> Style> = LazyLock::new(|| Style::default());
-const SELECT_STYLE: LazyLock<Style, fn() -> Style> =
+static DEFAULT_STYLE: LazyLock<Style, fn() -> Style> = LazyLock::new(Style::default);
+static SELECT_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Yellow));
-const RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
+static RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Green));
-const WRONG_STYLE: LazyLock<Style, fn() -> Style> =
+static WRONG_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Red));
 
 // static  DEFAULT_STYLE: Style = Style::default();
@@ -96,28 +96,26 @@ impl SelectQuestion {
         match user_input_idx {
             None => *DEFAULT_STYLE,
             Some(user_idx) => match state {
-                State::ING => {
+                State::Ing => {
                     if i == user_idx {
                         *SELECT_STYLE
                     } else {
                         *DEFAULT_STYLE
                     }
                 }
-                State::END => {
+                State::End => {
                     if user_idx == answer_idx {
                         if i == user_idx {
                             *RIGHT_STYLE
                         } else {
                             *DEFAULT_STYLE
                         }
+                    } else if i == user_idx {
+                        *WRONG_STYLE
+                    } else if i == answer_idx {
+                        *RIGHT_STYLE
                     } else {
-                        if i == user_idx {
-                            *WRONG_STYLE
-                        } else if i == answer_idx {
-                            *RIGHT_STYLE
-                        } else {
-                            *DEFAULT_STYLE
-                        }
+                        *DEFAULT_STYLE
                     }
                 }
             },
@@ -126,7 +124,7 @@ impl SelectQuestion {
 }
 
 fn answer_to_idx(answer: &str) -> Option<usize> {
-    if answer.len() == 0 {
+    if answer.is_empty() {
         return None;
     }
     Some(match answer {
@@ -142,7 +140,7 @@ fn answer_to_idx(answer: &str) -> Option<usize> {
     })
 }
 
-impl<'a> From<&SelectQuestion> for Text<'a> {
+impl From<&SelectQuestion> for Text<'_> {
     fn from(q: &SelectQuestion) -> Self {
         let mut text = vec![];
         let mut question = q.question.clone();
@@ -155,18 +153,6 @@ impl<'a> From<&SelectQuestion> for Text<'a> {
             text.push(Line::from(option.clone()));
         }
         Text::from(text)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::components::examination::question::load_questions;
-
-    #[test]
-    fn test() {
-        let questions = load_questions();
-        let string = serde_json::to_string(&questions).unwrap();
-        println!("{}", string);
     }
 }
 
@@ -284,4 +270,16 @@ fn load_questions() -> Vec<SelectQuestion> {
         },
     ];
     questions
+}
+
+#[cfg(test)]
+mod test {
+    use crate::components::examination::question::load_questions;
+
+    #[test]
+    fn test() {
+        let questions = load_questions();
+        let string = serde_json::to_string(&questions).unwrap();
+        println!("{}", string);
+    }
 }

@@ -1,10 +1,7 @@
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::prelude::Rect;
-use ratatui::widgets::ScrollbarState;
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
@@ -66,7 +63,7 @@ impl App {
                     question_tx,
                     answer_rx,
                     mode_holder.clone(),
-                    config.clone()
+                    config.clone(),
                 )),
                 Box::new(UserInput::new(question_rx, answer_tx, mode_holder.clone())),
                 Box::new(Alert::new(mode_holder.clone())),

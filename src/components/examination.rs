@@ -4,20 +4,17 @@ use super::Component;
 use crate::action::ConfirmEvent;
 use crate::app::{Mode, ModeHolder};
 use crate::components::examination::question::{Questions, SelectQuestion};
-use crate::tui::Event;
 use crate::{action::Action, config::Config};
-use color_eyre::owo_colors::OwoColorize;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
-use ratatui::text::{Line, Span, Text};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Span, Text};
 use ratatui::widgets::*;
 use ratatui::Frame;
-use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tracing::{info, warn};
+use tracing::info;
 
 pub struct Examination {
     command_tx: Option<UnboundedSender<Action>>,
@@ -32,9 +29,9 @@ pub struct Examination {
 }
 
 #[derive(Eq, PartialEq)]
-enum State {
-    ING,
-    END,
+pub(crate) enum State {
+    Ing,
+    End,
 }
 
 impl Examination {
@@ -53,7 +50,7 @@ impl Examination {
             answer_rx,
             mode_holder: state_holder,
             score: None,
-            state: State::ING,
+            state: State::Ing,
         };
         examination.list_state.select_first();
         examination
@@ -86,22 +83,19 @@ impl Component for Examination {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        match self.mode_holder.lock().unwrap().mode {
-            Mode::Examination => {
-                match key.code {
-                    KeyCode::Char('j') | KeyCode::Down => self.list_state.select_next(),
-                    KeyCode::Char('k') | KeyCode::Up => self.list_state.select_previous(),
-                    KeyCode::Char('l') | KeyCode::Right if self.state == State::ING => {
-                        // 弹框请用户输入答案
-                        let idx = self.list_state.selected().unwrap();
-                        info!("send {idx} to user_input");
-                        let user_input = self.questions.0.get_mut(idx).unwrap().user_input.clone();
-                        self.question_tx.send(user_input).unwrap();
-                    }
-                    _ => {}
+        if self.mode_holder.lock().unwrap().mode == Mode::Examination {
+            match key.code {
+                KeyCode::Char('j') | KeyCode::Down => self.list_state.select_next(),
+                KeyCode::Char('k') | KeyCode::Up => self.list_state.select_previous(),
+                KeyCode::Char('l') | KeyCode::Right if self.state == State::Ing => {
+                    // 弹框请用户输入答案
+                    let idx = self.list_state.selected().unwrap();
+                    info!("send {idx} to user_input");
+                    let user_input = self.questions.0.get_mut(idx).unwrap().user_input.clone();
+                    self.question_tx.send(user_input).unwrap();
                 }
+                _ => {}
             }
-            _ => {}
         }
         Ok(None)
     }
@@ -111,7 +105,7 @@ impl Component for Examination {
             // 交卷
             Action::Submit => {
                 // 判断是否全部题目都已经做完，否则弹框提示
-                if let Some(_) = &self.questions.0.iter().find(|&q| q.user_input.is_empty()) {
+                if self.questions.0.iter().any(|q| q.user_input.is_empty()) {
                     return Ok(Some(Action::Alert(
                         "还有题目未做完，是否确认交卷？".to_string(),
                         ConfirmEvent::Submit,
@@ -130,7 +124,7 @@ impl Component for Examination {
                 )))
             }
             Action::Confirm(ConfirmEvent::Score) => {
-                self.state = State::END;
+                self.state = State::End;
                 self.mode_holder.lock().unwrap().mode = Mode::Examination;
                 Ok(None)
             }
@@ -165,13 +159,13 @@ impl Component for Examination {
             .collect::<Vec<Text>>();
 
         let list = match self.state {
-            State::ING => List::from_iter(texts)
+            State::Ing => List::from_iter(texts)
                 .style(Color::Gray)
                 .highlight_style(Style::default().fg(Color::LightBlue))
                 .highlight_symbol("> ")
                 .scroll_padding(1)
                 .block(block),
-            State::END => List::from_iter(texts)
+            State::End => List::from_iter(texts)
                 .style(Color::Gray)
                 .scroll_padding(1)
                 .block(block),

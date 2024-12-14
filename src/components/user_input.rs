@@ -4,7 +4,7 @@ use crate::components::area_util::centered_rect;
 use crate::components::Component;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Position, Rect};
-use ratatui::style::{Color, Style, Stylize};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
@@ -29,8 +29,8 @@ pub struct UserInput {
 
 impl Component for UserInput {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
-        match self.get_state() {
-            Mode::Input => match key.code {
+        if self.get_state() == Mode::Input {
+            match key.code {
                 KeyCode::Enter => self.submit_message(),
                 KeyCode::Char(to_insert) => self.enter_char(to_insert),
                 KeyCode::Backspace => self.delete_char(),
@@ -38,8 +38,7 @@ impl Component for UserInput {
                 KeyCode::Right => self.move_cursor_right(),
                 KeyCode::Esc => self.close(),
                 _ => {}
-            },
-            _ => {}
+            }
         }
         Ok(None)
     }
@@ -61,7 +60,7 @@ impl Component for UserInput {
                     Constraint::Length(3),
                     Constraint::Fill(1),
                 ]);
-                let [help_area, input_area, other] = vertical.areas(area);
+                let [help_area, input_area, _other] = vertical.areas(area);
 
                 let (msg, style) = (
                     vec!["Press Esc to stop exist, Press Enter to submit answer.".into()],
@@ -107,7 +106,7 @@ impl UserInput {
     }
 
     fn get_state(&self) -> Mode {
-        self.state_holder.lock().unwrap().mode.clone()
+        self.state_holder.lock().unwrap().mode
     }
 
     fn move_cursor_left(&mut self) {

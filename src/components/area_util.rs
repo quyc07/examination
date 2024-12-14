@@ -1,9 +1,5 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
-pub fn user_input_area(area: Rect) -> Rect {
-    centered_rect(50, 30, area)
-}
-
 pub fn split_rect(percent: u16, r: Rect, direction: Direction) -> (Rect, Rect) {
     let rects = Layout::default()
         .direction(direction)

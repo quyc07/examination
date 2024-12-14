@@ -4,7 +4,7 @@ use crate::components::area_util::centered_rect;
 use crate::components::Component;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style, Stylize};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
@@ -35,13 +35,10 @@ impl Component for Alert {
     }
 
     fn update(&mut self, action: Action) -> color_eyre::Result<Option<Action>> {
-        match action {
-            Action::Alert(msg, confirm_event) => {
-                self.msg = msg;
-                self.confirm_event = confirm_event;
-                self.mode_holder.lock().unwrap().mode = Mode::Alert
-            }
-            _ => {}
+        if let Action::Alert(msg, confirm_event) = action {
+            self.msg = msg;
+            self.confirm_event = confirm_event;
+            self.mode_holder.lock().unwrap().mode = Mode::Alert
         }
         Ok(None)
     }
@@ -57,7 +54,7 @@ impl Component for Alert {
                     Constraint::Length(3),
                     Constraint::Fill(1),
                 ]);
-                let [help_area, alert_area, other] = vertical.areas(area);
+                let [help_area, alert_area, _other] = vertical.areas(area);
 
                 let (msg, style) = (
                     vec!["Press Esc to quit, Press Enter to submit.".into()],
@@ -87,7 +84,7 @@ impl Alert {
     }
 
     fn get_state(&self) -> Mode {
-        self.mode_holder.lock().unwrap().mode.clone()
+        self.mode_holder.lock().unwrap().mode
     }
 
     fn close(&mut self) {

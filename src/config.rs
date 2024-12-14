@@ -5,11 +5,10 @@ use std::{collections::HashMap, env, path::PathBuf};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use derive_deref::{Deref, DerefMut};
-use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use ratatui::style::{Color, Modifier, Style};
 use serde::{de::Deserializer, Deserialize};
-use tracing::{error, info};
+use tracing::error;
 
 use crate::{action::Action, app::Mode};
 
@@ -97,21 +96,19 @@ impl Config {
 }
 
 pub fn get_data_dir() -> PathBuf {
-    let directory = if let Some(s) = DATA_FOLDER.clone() {
+    if let Some(s) = DATA_FOLDER.clone() {
         s
     } else {
         env::current_dir().unwrap().join(".data")
-    };
-    directory
+    }
 }
 
 pub fn get_config_dir() -> PathBuf {
-    let directory = if let Some(s) = CONFIG_FOLDER.clone() {
+    if let Some(s) = CONFIG_FOLDER.clone() {
         s
     } else {
         env::current_dir().unwrap().join(".config")
-    };
-    directory
+    }
 }
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
