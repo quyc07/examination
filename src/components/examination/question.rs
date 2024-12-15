@@ -58,18 +58,6 @@ static WRONG_STYLE: LazyLock<Style, fn() -> Style> =
 // static  WRONG_STYLE: Style = Style::default().bg(Color::Red);
 
 impl SelectQuestion {
-    // TODO 需要考虑题目和选项长度，是否需要折行
-    fn cal_total_length(&self) -> u16 {
-        (self.options.len() + 1) as u16
-    }
-    fn question_length(&self) -> u16 {
-        1u16
-    }
-
-    fn option_length(_option: &str) -> u16 {
-        1u16
-    }
-
     pub(crate) fn convert_lines<'a>(&self, state: &State, i: usize) -> Text<'a> {
         let mut lines = vec![];
         let mut question = self.question.clone();
