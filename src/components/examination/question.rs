@@ -13,7 +13,7 @@ pub struct SelectQuestion {
     pub question: String,
     pub options: Vec<String>,
     pub answer: String,
-    pub user_input: String,
+    pub user_input: Option<String>,
 }
 
 pub struct Questions<T>(pub(crate) Vec<T>);
@@ -39,11 +39,6 @@ impl<T> Deref for Questions<T> {
     }
 }
 
-impl Default for Questions<SelectQuestion> {
-    fn default() -> Self {
-        Questions(load_questions())
-    }
-}
 static DEFAULT_STYLE: LazyLock<Style, fn() -> Style> = LazyLock::new(Style::default);
 static SELECT_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Yellow));
@@ -52,23 +47,18 @@ static RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
 static WRONG_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Red));
 
-// static  DEFAULT_STYLE: Style = Style::default();
-// static  SELECT_STYLE: Style = Style::default().bg(Color::Yellow);
-// static  RIGHT_STYLE: Style = Style::default().bg(Color::Green);
-// static  WRONG_STYLE: Style = Style::default().bg(Color::Red);
-
 impl SelectQuestion {
     pub(crate) fn convert_lines<'a>(&self, state: &State, i: usize) -> Text<'a> {
         let mut lines = vec![];
         let mut question = self.question.clone();
-        if !self.user_input.is_empty() {
-            let answer = format!("（{}）", self.user_input);
+        if let Some(user_input) = &self.user_input {
+            let answer = format!("（{}）", user_input);
             question = question.replace("（ ）", answer.as_str());
         }
         lines.push(Line::from(format!("{}: {question}", i + 1)));
         for (i, option) in self.options.iter().enumerate() {
-            let user_input_idx = answer_to_idx(self.user_input.as_str());
-            let answer_idx = answer_to_idx(self.answer.as_str());
+            let user_input_idx = answer_to_idx(self.user_input.clone());
+            let answer_idx = answer_to_idx(Some(self.answer.clone()));
             let style = Self::check_style(state, i, user_input_idx, answer_idx.unwrap());
             lines.push(Line::from(format!("  {option}")).style(style));
         }
@@ -111,11 +101,8 @@ impl SelectQuestion {
     }
 }
 
-fn answer_to_idx(answer: &str) -> Option<usize> {
-    if answer.is_empty() {
-        return None;
-    }
-    match answer {
+fn answer_to_idx(answer: Option<String>) -> Option<usize> {
+    answer.and_then(|answer| match answer.as_str() {
         "A" | "a" => Some(0),
         "B" | "b" => Some(1),
         "C" | "c" => Some(2),
@@ -125,15 +112,15 @@ fn answer_to_idx(answer: &str) -> Option<usize> {
         "G" | "g" => Some(6),
         "H" | "h" => Some(7),
         _ => None,
-    }
+    })
 }
 
 impl From<&SelectQuestion> for Text<'_> {
     fn from(q: &SelectQuestion) -> Self {
         let mut text = vec![];
         let mut question = q.question.clone();
-        if !q.user_input.is_empty() {
-            let answer = format!("（{}）", q.user_input);
+        if let Some(user_input) = &q.user_input {
+            let answer = format!("（{}）", user_input);
             question = question.replace("（ ）", answer.as_str());
         }
         text.push(Line::from(question));
@@ -141,133 +128,5 @@ impl From<&SelectQuestion> for Text<'_> {
             text.push(Line::from(option.clone()));
         }
         Text::from(text)
-    }
-}
-
-fn load_questions() -> Vec<SelectQuestion> {
-    let questions = vec![
-        SelectQuestion {
-            question: "北京奥运会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1998".to_string(),
-                "B: 2008".to_string(),
-                "C: 2018".to_string(),
-                "D: 2020".to_string(),
-            ],
-            answer: "B".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京冬奥会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1992".to_string(),
-                "B: 2002".to_string(),
-                "C: 2012".to_string(),
-                "D: 2022".to_string(),
-            ],
-            answer: "D".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京奥运会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1998".to_string(),
-                "B: 2008".to_string(),
-                "C: 2018".to_string(),
-                "D: 2020".to_string(),
-            ],
-            answer: "B".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京冬奥会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1992".to_string(),
-                "B: 2002".to_string(),
-                "C: 2012".to_string(),
-                "D: 2022".to_string(),
-            ],
-            answer: "D".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京奥运会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1998".to_string(),
-                "B: 2008".to_string(),
-                "C: 2018".to_string(),
-                "D: 2020".to_string(),
-            ],
-            answer: "B".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京冬奥会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1992".to_string(),
-                "B: 2002".to_string(),
-                "C: 2012".to_string(),
-                "D: 2022".to_string(),
-            ],
-            answer: "D".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京奥运会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1998".to_string(),
-                "B: 2008".to_string(),
-                "C: 2018".to_string(),
-                "D: 2020".to_string(),
-            ],
-            answer: "B".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京冬奥会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1992".to_string(),
-                "B: 2002".to_string(),
-                "C: 2012".to_string(),
-                "D: 2022".to_string(),
-            ],
-            answer: "D".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京奥运会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1998".to_string(),
-                "B: 2008".to_string(),
-                "C: 2018".to_string(),
-                "D: 2020".to_string(),
-            ],
-            answer: "B".to_string(),
-            user_input: "".to_string(),
-        },
-        SelectQuestion {
-            question: "北京冬奥会于（ ）年举办".to_string(),
-            options: vec![
-                "A：1992".to_string(),
-                "B: 2002".to_string(),
-                "C: 2012".to_string(),
-                "D: 2022".to_string(),
-            ],
-            answer: "D".to_string(),
-            user_input: "".to_string(),
-        },
-    ];
-    questions
-}
-
-#[cfg(test)]
-mod test {
-    use crate::components::examination::question::load_questions;
-
-    #[test]
-    fn test() {
-        let questions = load_questions();
-        let string = serde_json::to_string(&questions).unwrap();
-        println!("{}", string);
     }
 }

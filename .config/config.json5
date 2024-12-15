@@ -1,16 +1,10 @@
 {
   "keybindings": {
     "Examination": {
-      "<q>": "Quit",
-      // Quit the application
-      "<Ctrl-d>": "Quit",
-      // Another way to quit
+      // 退出
       "<Ctrl-c>": "Quit",
-      // Yet another way to quit
-      "<Ctrl-z>": "Suspend",
-      // Suspend the application
+      // 交卷
       "<Ctrl-s>": "Submit"
-      // Suspend the application
     }
   }
 }
