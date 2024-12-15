@@ -8,6 +8,23 @@ use std::io::Read;
 use std::ops::Deref;
 use std::sync::LazyLock;
 
+pub trait Question {
+    fn convert_text(&self, state: State, q_index: usize) -> Text<'_>;
+
+    fn option_style(
+        state: State,
+        i: usize,
+        user_input_idx: Option<usize>,
+        answer_idx: usize,
+    ) -> Style;
+
+    fn cal_score(&self) -> u16;
+
+    fn user_input(&self) -> Option<String>;
+
+    fn set_user_input(&mut self, user_input: Option<String>);
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct SelectQuestion {
     pub question: String,
@@ -48,26 +65,26 @@ static RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
 static WRONG_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Red));
 
-impl SelectQuestion {
-    pub(crate) fn convert_lines<'a>(&self, state: &State, i: usize) -> Text<'a> {
+impl Question for SelectQuestion {
+    fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
         let mut lines = vec![];
         let mut question = self.question.clone();
         if let Some(user_input) = &self.user_input {
             let answer = format!("（{}）", user_input);
             question = question.replace("（ ）", answer.as_str());
         }
-        lines.push(Line::from(format!("{}: {question}", i + 1)));
+        lines.push(Line::from(format!("{}: {question}", q_index + 1)));
         for (i, option) in self.options.iter().enumerate() {
             let user_input_idx = answer_to_idx(self.user_input.clone());
             let answer_idx = answer_to_idx(Some(self.answer.clone()));
-            let style = Self::check_style(state, i, user_input_idx, answer_idx.unwrap());
+            let style = Self::option_style(state, i, user_input_idx, answer_idx.unwrap());
             lines.push(Line::from(format!("  {option}")).style(style));
         }
         Text::from(lines)
     }
 
-    fn check_style(
-        state: &State,
+    fn option_style(
+        state: State,
         i: usize,
         user_input_idx: Option<usize>,
         answer_idx: usize,
@@ -100,6 +117,27 @@ impl SelectQuestion {
             },
         }
     }
+
+    fn cal_score(&self) -> u16 {
+        self.user_input
+            .clone()
+            .map(|user_input| {
+                if self.answer.eq_ignore_ascii_case(user_input.as_str()) {
+                    self.score
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0)
+    }
+
+    fn user_input(&self) -> Option<String> {
+        self.user_input.clone()
+    }
+
+    fn set_user_input(&mut self, user_input: Option<String>) {
+        self.user_input = user_input;
+    }
 }
 
 fn answer_to_idx(answer: Option<String>) -> Option<usize> {
@@ -114,20 +152,4 @@ fn answer_to_idx(answer: Option<String>) -> Option<usize> {
         "H" | "h" => Some(7),
         _ => None,
     })
-}
-
-impl From<&SelectQuestion> for Text<'_> {
-    fn from(q: &SelectQuestion) -> Self {
-        let mut text = vec![];
-        let mut question = q.question.clone();
-        if let Some(user_input) = &q.user_input {
-            let answer = format!("（{}）", user_input);
-            question = question.replace("（ ）", answer.as_str());
-        }
-        text.push(Line::from(question));
-        for option in &q.options {
-            text.push(Line::from(option.clone()));
-        }
-        Text::from(text)
-    }
 }

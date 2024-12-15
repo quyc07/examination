@@ -3,7 +3,7 @@ mod question;
 use super::Component;
 use crate::action::ConfirmEvent;
 use crate::app::{Mode, ModeHolder};
-use crate::components::examination::question::{Questions, SelectQuestion};
+use crate::components::examination::question::{Question, Questions, SelectQuestion};
 use crate::{action::Action, config::Config};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -28,7 +28,7 @@ pub struct Examination {
     state: State,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Copy, Clone)]
 pub(crate) enum State {
     Ing,
     End,
@@ -60,18 +60,7 @@ impl Examination {
         self.questions
             .0
             .iter()
-            .map(|q| {
-                q.user_input
-                    .clone()
-                    .map(|user_input| {
-                        if q.answer.eq_ignore_ascii_case(user_input.as_str()) {
-                            q.score
-                        } else {
-                            0
-                        }
-                    })
-                    .unwrap_or(0)
-            })
+            .map(Question::cal_score)
             .sum::<u16>()
     }
 }
@@ -101,7 +90,7 @@ impl Component for Examination {
                         .0
                         .get_mut(idx)
                         .unwrap()
-                        .user_input
+                        .user_input()
                         .clone()
                         .unwrap_or_default();
                     self.question_tx.send(user_input).unwrap();
@@ -117,7 +106,7 @@ impl Component for Examination {
             // 交卷
             Action::Submit => {
                 // 判断是否全部题目都已经做完，否则弹框提示
-                if self.questions.0.iter().any(|q| q.user_input.is_none()) {
+                if self.questions.0.iter().any(|q| q.user_input().is_none()) {
                     return Ok(Some(Action::Alert(
                         "还有题目未做完，是否确认交卷？".to_string(),
                         ConfirmEvent::Submit,
@@ -152,7 +141,7 @@ impl Component for Examination {
                 .0
                 .get_mut(self.list_state.selected().unwrap())
                 .unwrap();
-            question.user_input = Some(answer);
+            question.set_user_input(Some(answer));
         }
         let block = Block::default()
             .borders(Borders::ALL)
@@ -167,7 +156,7 @@ impl Component for Examination {
             .questions
             .iter()
             .enumerate()
-            .map(|(i, q)| q.convert_lines(&self.state, i))
+            .map(|(i, q)| q.convert_text(self.state, i))
             .collect::<Vec<Text>>();
 
         let list = match self.state {
