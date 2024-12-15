@@ -14,6 +14,7 @@ pub struct SelectQuestion {
     pub options: Vec<String>,
     pub answer: String,
     pub user_input: Option<String>,
+    pub score: u16,
 }
 
 pub struct Questions<T>(pub(crate) Vec<T>);

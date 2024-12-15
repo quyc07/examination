@@ -24,7 +24,7 @@ pub struct Examination {
     question_tx: UnboundedSender<String>,
     answer_rx: UnboundedReceiver<String>,
     mode_holder: Arc<Mutex<ModeHolder>>,
-    score: Option<usize>,
+    score: Option<u16>,
     state: State,
 }
 
@@ -56,7 +56,7 @@ impl Examination {
         examination
     }
 
-    fn cal_score(&self) -> usize {
+    fn cal_score(&self) -> u16 {
         self.questions
             .0
             .iter()
@@ -65,14 +65,14 @@ impl Examination {
                     .clone()
                     .map(|user_input| {
                         if q.answer.eq_ignore_ascii_case(user_input.as_str()) {
-                            1
+                            q.score
                         } else {
                             0
                         }
                     })
                     .unwrap_or(0)
             })
-            .sum::<usize>()
+            .sum::<u16>()
     }
 }
 
