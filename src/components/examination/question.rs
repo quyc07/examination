@@ -127,17 +127,17 @@ fn answer_to_idx(answer: &str) -> Option<usize> {
     if answer.is_empty() {
         return None;
     }
-    Some(match answer {
-        "A" | "a" => 0,
-        "B" | "b" => 1,
-        "C" | "c" => 2,
-        "D" | "d" => 3,
-        "E" | "e" => 4,
-        "F" | "f" => 5,
-        "G" | "g" => 6,
-        "H" | "h" => 7,
-        _ => panic!("Invalid answer"),
-    })
+    match answer {
+        "A" | "a" => Some(0),
+        "B" | "b" => Some(1),
+        "C" | "c" => Some(2),
+        "D" | "d" => Some(3),
+        "E" | "e" => Some(4),
+        "F" | "f" => Some(5),
+        "G" | "g" => Some(6),
+        "H" | "h" => Some(7),
+        _ => None,
+    }
 }
 
 impl From<&SelectQuestion> for Text<'_> {
