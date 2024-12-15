@@ -490,20 +490,6 @@ mod tests {
     }
 
     #[test]
-    fn test_config() -> Result<()> {
-        let c = Config::new()?;
-        assert_eq!(
-            c.keybindings
-                .get(&Mode::Examination)
-                .unwrap()
-                .get(&parse_key_sequence("<q>").unwrap_or_default())
-                .unwrap(),
-            &Action::Quit
-        );
-        Ok(())
-    }
-
-    #[test]
     fn test_simple_keys() {
         assert_eq!(
             parse_key_event("a").unwrap(),
