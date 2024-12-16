@@ -5,13 +5,13 @@ use ratatui::style::{Color, Style};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
-use std::ops::Deref;
 use std::sync::LazyLock;
 
 pub trait Question {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_>;
 
     fn option_style(
+        &self,
         state: State,
         i: usize,
         user_input_idx: Option<usize>,
@@ -26,7 +26,7 @@ pub trait Question {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SelectQuestion {
+pub struct SingleSelect {
     pub question: String,
     pub options: Vec<String>,
     pub answer: String,
@@ -34,26 +34,60 @@ pub struct SelectQuestion {
     pub score: u16,
 }
 
-pub struct Questions<T>(pub(crate) Vec<T>);
+#[derive(Serialize, Deserialize)]
+pub enum QuestionEnum {
+    SingleSelect(SingleSelect),
+    // MultiSelect(MultiSelect),
+    // Judge(Judge),
+    // FillIn(FillIn),
+}
 
-impl Questions<SelectQuestion> {
-    pub(crate) fn load(config: Config) -> Questions<SelectQuestion> {
+impl QuestionEnum {
+    pub(crate) fn load(config: Config) -> Vec<QuestionEnum> {
         let mut questions = String::new();
         File::open(config.config.data_dir.join("question.json"))
             .unwrap()
             .read_to_string(&mut questions)
             .expect("Fail to load question!");
-        let select_question =
-            serde_json::from_slice::<Vec<SelectQuestion>>(questions.as_ref()).unwrap();
-        Questions(select_question)
+        serde_json::from_slice::<Vec<QuestionEnum>>(questions.as_ref()).unwrap()
     }
 }
 
-impl<T> Deref for Questions<T> {
-    type Target = Vec<T>;
+impl Question for QuestionEnum {
+    fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
+        match self {
+            QuestionEnum::SingleSelect(q) => q.convert_text(state, q_index),
+        }
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    fn option_style(
+        &self,
+        state: State,
+        i: usize,
+        user_input_idx: Option<usize>,
+        answer_idx: usize,
+    ) -> Style {
+        match self {
+            QuestionEnum::SingleSelect(q) => q.option_style(state, i, user_input_idx, answer_idx),
+        }
+    }
+
+    fn cal_score(&self) -> u16 {
+        match self {
+            QuestionEnum::SingleSelect(q) => q.cal_score(),
+        }
+    }
+
+    fn user_input(&self) -> Option<String> {
+        match self {
+            QuestionEnum::SingleSelect(q) => q.user_input(),
+        }
+    }
+
+    fn set_user_input(&mut self, user_input: Option<String>) {
+        match self {
+            QuestionEnum::SingleSelect(q) => q.set_user_input(user_input),
+        }
     }
 }
 
@@ -65,7 +99,7 @@ static RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
 static WRONG_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Red));
 
-impl Question for SelectQuestion {
+impl Question for SingleSelect {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
         let mut lines = vec![];
         let mut question = self.question.clone();
@@ -77,13 +111,14 @@ impl Question for SelectQuestion {
         for (i, option) in self.options.iter().enumerate() {
             let user_input_idx = answer_to_idx(self.user_input.clone());
             let answer_idx = answer_to_idx(Some(self.answer.clone()));
-            let style = Self::option_style(state, i, user_input_idx, answer_idx.unwrap());
+            let style = self.option_style(state, i, user_input_idx, answer_idx.unwrap());
             lines.push(Line::from(format!("  {option}")).style(style));
         }
         Text::from(lines)
     }
 
     fn option_style(
+        &self,
         state: State,
         i: usize,
         user_input_idx: Option<usize>,

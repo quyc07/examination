@@ -1,112 +1,106 @@
 [
   {
-    "question": "北京奥运会于（ ）年举办",
-    "options": [
-      "A: 1998",
-      "B: 2008",
-      "C: 2018",
-      "D: 2020"
-    ],
-    "answer": "B",
-    "score": 1
+    "SingleSelect": {
+      "question": "北京奥运会于（ ）年举办",
+      "options": [
+        "A: 1998",
+        "B: 2008",
+        "C: 2018",
+        "D: 2020"
+      ],
+      "answer": "B",
+      "score": 1
+    }
   },
   {
-    "question": "北京冬奥会于（ ）年举办",
-    "options": [
-      "A: 1992",
-      "B: 2002",
-      "C: 2012",
-      "D: 2022"
-    ],
-    "answer": "D",
-    "score": 1
+    "SingleSelect": {
+      "question": "北京冬奥会于（ ）年举办",
+      "options": [
+        "A: 1992",
+        "B: 2002",
+        "C: 2012",
+        "D: 2022"
+      ],
+      "answer": "D",
+      "score": 1
+    }
   },
   {
-    "question": "北京奥运会于（ ）年举办",
-    "options": [
-      "A: 1998",
-      "B: 2008",
-      "C: 2018",
-      "D: 2020"
-    ],
-    "answer": "B",
-    "score": 1
+    "SingleSelect": {
+      "question": "北京奥运会于（ ）年举办",
+      "options": [
+        "A: 1998",
+        "B: 2008",
+        "C: 2018",
+        "D: 2020"
+      ],
+      "answer": "B",
+      "score": 1
+    }
   },
   {
-    "question": "北京冬奥会于（ ）年举办",
-    "options": [
-      "A: 1992",
-      "B: 2002",
-      "C: 2012",
-      "D: 2022"
-    ],
-    "answer": "D",
-    "score": 1
+    "SingleSelect": {
+      "question": "北京冬奥会于（ ）年举办",
+      "options": [
+        "A: 1992",
+        "B: 2002",
+        "C: 2012",
+        "D: 2022"
+      ],
+      "answer": "D",
+      "score": 1
+    }
   },
   {
-    "question": "北京奥运会于（ ）年举办",
-    "options": [
-      "A: 1998",
-      "B: 2008",
-      "C: 2018",
-      "D: 2020"
-    ],
-    "answer": "B",
-    "score": 1
+    "SingleSelect": {
+      "question": "北京奥运会于（ ）年举办",
+      "options": [
+        "A: 1998",
+        "B: 2008",
+        "C: 2018",
+        "D: 2020"
+      ],
+      "answer": "B",
+      "score": 1
+    }
   },
   {
-    "question": "北京冬奥会于（ ）年举办",
-    "options": [
-      "A: 1992",
-      "B: 2002",
-      "C: 2012",
-      "D: 2022"
-    ],
-    "answer": "D",
-    "score": 1
+    "SingleSelect": {
+      "question": "北京冬奥会于（ ）年举办",
+      "options": [
+        "A: 1992",
+        "B: 2002",
+        "C: 2012",
+        "D: 2022"
+      ],
+      "answer": "D",
+      "score": 1
+    }
   },
   {
-    "question": "北京奥运会于（ ）年举办",
-    "options": [
-      "A: 1998",
-      "B: 2008",
-      "C: 2018",
-      "D: 2020"
-    ],
-    "answer": "B",
-    "score": 1
+    "SingleSelect": {
+      "question": "北京奥运会于（ ）年举办",
+      "options": [
+        "A: 1998",
+        "B: 2008",
+        "C: 2018",
+        "D: 2020"
+      ],
+      "answer": "B",
+      "score": 1
+    }
   },
   {
-    "question": "北京冬奥会于（ ）年举办",
-    "options": [
-      "A: 1992",
-      "B: 2002",
-      "C: 2012",
-      "D: 2022"
-    ],
-    "answer": "D",
-    "score": 1
-  },
-  {
-    "question": "北京奥运会于（ ）年举办",
-    "options": [
-      "A: 1998",
-      "B: 2008",
-      "C: 2018",
-      "D: 2020"
-    ],
-    "answer": "B",
-    "score": 1
-  },
-  {
-    "question": "北京冬奥会于（ ）年举办",
-    "options": [
-      "A: 1992",
-      "B: 2002",
-      "C: 2012",
-      "D: 2022"
-    ],
-    "answer": "D",
-    "score": 1
+    "SingleSelect": {
+      "question": "北京冬奥会于（ ）年举办",
+      "options": [
+        "A: 1992",
+        "B: 2002",
+        "C: 2012",
+        "D: 2022"
+      ],
+      "answer": "D",
+      "score": 1
+    }
   }
 ]

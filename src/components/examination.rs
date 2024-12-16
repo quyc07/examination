@@ -3,7 +3,7 @@ mod question;
 use super::Component;
 use crate::action::ConfirmEvent;
 use crate::app::{Mode, ModeHolder};
-use crate::components::examination::question::{Question, Questions, SelectQuestion};
+use crate::components::examination::question::{Question, QuestionEnum};
 use crate::{action::Action, config::Config};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -20,7 +20,7 @@ pub struct Examination {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
     list_state: ListState,
-    questions: Questions<SelectQuestion>,
+    questions: Vec<QuestionEnum>,
     question_tx: UnboundedSender<String>,
     answer_rx: UnboundedReceiver<String>,
     mode_holder: Arc<Mutex<ModeHolder>>,
@@ -45,7 +45,7 @@ impl Examination {
             command_tx: None,
             config: config.clone(),
             list_state: Default::default(),
-            questions: Questions::load(config),
+            questions: QuestionEnum::load(config),
             question_tx,
             answer_rx,
             mode_holder: state_holder,
@@ -58,10 +58,22 @@ impl Examination {
 
     fn cal_score(&self) -> u16 {
         self.questions
-            .0
             .iter()
-            .map(Question::cal_score)
+            .map(|q| match q {
+                QuestionEnum::SingleSelect(q) => q.cal_score(),
+            })
             .sum::<u16>()
+    }
+
+    fn handle_submit(&mut self) -> Result<Option<Action>> {
+        self.mode_holder.lock().unwrap().mode = Mode::Examination;
+        // 计算得分
+        let score = self.cal_score();
+        self.score = Some(score);
+        Ok(Some(Action::Alert(
+            format!("您的最终得分是{score}"),
+            ConfirmEvent::Score,
+        )))
     }
 }
 
@@ -87,7 +99,6 @@ impl Component for Examination {
                     info!("send {idx} to user_input");
                     let user_input = self
                         .questions
-                        .0
                         .get_mut(idx)
                         .unwrap()
                         .user_input()
@@ -106,24 +117,16 @@ impl Component for Examination {
             // 交卷
             Action::Submit => {
                 // 判断是否全部题目都已经做完，否则弹框提示
-                if self.questions.0.iter().any(|q| q.user_input().is_none()) {
-                    return Ok(Some(Action::Alert(
+                if self.questions.iter().any(|q| q.user_input().is_none()) {
+                    Ok(Some(Action::Alert(
                         "还有题目未做完，是否确认交卷？".to_string(),
                         ConfirmEvent::Submit,
-                    )));
+                    )))
+                } else {
+                    self.handle_submit()
                 }
-                Ok(None)
             }
-            Action::Confirm(ConfirmEvent::Submit) => {
-                self.mode_holder.lock().unwrap().mode = Mode::Examination;
-                // 计算得分
-                let score = self.cal_score();
-                self.score = Some(score);
-                Ok(Some(Action::Alert(
-                    format!("您的最终得分是{score}"),
-                    ConfirmEvent::Score,
-                )))
-            }
+            Action::Confirm(ConfirmEvent::Submit) => self.handle_submit(),
             Action::Confirm(ConfirmEvent::Score) => {
                 self.state = State::End;
                 self.mode_holder.lock().unwrap().mode = Mode::Examination;
@@ -138,7 +141,6 @@ impl Component for Examination {
             self.mode_holder.lock().unwrap().set_mode(Mode::Examination);
             let question = self
                 .questions
-                .0
                 .get_mut(self.list_state.selected().unwrap())
                 .unwrap();
             question.set_user_input(Some(answer));
