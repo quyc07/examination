@@ -61,6 +61,7 @@ impl Examination {
             .iter()
             .map(|q| match q {
                 QuestionEnum::SingleSelect(q) => q.cal_score(),
+                QuestionEnum::MultiSelect(q) => q.cal_score(),
             })
             .sum::<u16>()
     }
