@@ -96,7 +96,8 @@ jobs:
         run: |
 
           cd target/${{ matrix.target }}/release
-
+          echo ${{ secrets.ASSETS_TOKEN }}
+          echo ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
           ####### reduce binary size by removing debug symbols #######
 
