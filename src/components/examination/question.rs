@@ -4,6 +4,7 @@ use itertools::Itertools;
 use ratatui::prelude::{Line, Text};
 use ratatui::style::{Color, Style};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::sync::LazyLock;
@@ -173,11 +174,9 @@ impl Question for SingleSelect {
         self.user_input
             .clone()
             .map(|user_input| {
-                if user_input
-                    .chars()
-                    .zip_eq(self.answer.chars())
-                    .all(|(a, b)| a.eq_ignore_ascii_case(&b))
-                {
+                let user_input_set = user_input.chars().collect::<HashSet<_>>();
+                let answer_set = self.answer.chars().collect::<HashSet<_>>();
+                if user_input_set == answer_set {
                     self.score
                 } else {
                     0
@@ -259,12 +258,9 @@ impl Question for MultiSelect {
         self.user_input
             .clone()
             .map(|user_input| {
-                // TODO bugfix
-                if user_input
-                    .chars()
-                    .zip_eq(self.answer.chars())
-                    .all(|(a, b)| a.eq_ignore_ascii_case(&b))
-                {
+                let user_input_set = user_input.chars().collect::<HashSet<_>>();
+                let answer_set = self.answer.chars().collect::<HashSet<_>>();
+                if user_input_set == answer_set {
                     self.score
                 } else {
                     0
@@ -293,5 +289,33 @@ fn to_idx(answer: &str) -> Option<usize> {
         "G" | "g" => Some(6),
         "H" | "h" => Some(7),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::components::examination::question::{MultiSelect, Question};
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_cal_score() {
+        let mut multi_select = MultiSelect {
+            question: "question".to_string(),
+            options: vec!["A".to_string(), "B".to_string()],
+            answer: "AB".to_string(),
+            user_input: Some("ab".to_string()),
+            score: 1,
+        };
+        let score = multi_select.cal_score();
+        assert_eq!(score, 1);
+        // multi_select.answer = "ba".to_string();
+        // assert_eq!(multi_select.cal_score(), 1)
+        let vec1 = vec![1, 2, 3];
+        let vec2 = vec![2, 1, 3];
+        // let x = vec1.iter().zip_eq(vec2.iter()).all(|(a, b)| a.eq(b));
+        // assert!(x);
+        let hash_set1 = vec1.iter().collect::<HashSet<_>>();
+        let hash_set2 = vec2.iter().collect::<HashSet<_>>();
+        assert!(hash_set1.eq(&hash_set2));
     }
 }
