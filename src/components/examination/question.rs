@@ -1,6 +1,5 @@
 use crate::components::examination::State;
 use crate::config::Config;
-use itertools::Itertools;
 use ratatui::prelude::{Line, Text};
 use ratatui::style::{Color, Style};
 use serde::{Deserialize, Serialize};
@@ -18,11 +17,52 @@ pub trait Question {
         i: usize,
         user_input_idx: Option<Vec<usize>>,
         answer_idx: Vec<usize>,
-    ) -> Style;
+    ) -> Style {
+        match user_input_idx {
+            None => *DEFAULT_STYLE,
+            Some(user_idx) => match state {
+                State::Ing => {
+                    if user_idx.contains(&i) {
+                        *SELECT_STYLE
+                    } else {
+                        *DEFAULT_STYLE
+                    }
+                }
+                State::End => {
+                    if answer_idx.contains(&i) && user_idx.contains(&i) {
+                        *RIGHT_STYLE
+                    } else if user_idx.contains(&i) {
+                        *WRONG_STYLE
+                    } else if answer_idx.contains(&i) {
+                        *RIGHT_STYLE
+                    } else {
+                        *DEFAULT_STYLE
+                    }
+                }
+            },
+        }
+    }
 
-    fn cal_score(&self) -> u16;
+    fn cal_score(&self) -> u16 {
+        self.user_input()
+            .clone()
+            .map(|user_input| {
+                let user_input_set = user_input.chars().collect::<HashSet<_>>();
+                let answer_set = self.answer().chars().collect::<HashSet<_>>();
+                if user_input_set == answer_set {
+                    self.score()
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0)
+    }
 
     fn user_input(&self) -> Option<String>;
+
+    fn answer(&self) -> String;
+
+    fn score(&self) -> u16;
 
     fn set_user_input(&mut self, user_input: Option<String>);
 }
@@ -62,44 +102,22 @@ impl QuestionEnum {
             .expect("Fail to load question!");
         serde_json::from_slice::<Vec<QuestionEnum>>(questions.as_ref()).unwrap()
     }
-}
 
-impl Question for QuestionEnum {
-    fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
+    pub fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
         match self {
             QuestionEnum::SingleSelect(q) => q.convert_text(state, q_index),
             QuestionEnum::MultiSelect(q) => q.convert_text(state, q_index),
         }
     }
 
-    fn option_style(
-        &self,
-        state: State,
-        i: usize,
-        user_input_idx: Option<Vec<usize>>,
-        answer_idx: Vec<usize>,
-    ) -> Style {
-        match self {
-            QuestionEnum::SingleSelect(q) => q.option_style(state, i, user_input_idx, answer_idx),
-            QuestionEnum::MultiSelect(q) => q.option_style(state, i, user_input_idx, answer_idx),
-        }
-    }
-
-    fn cal_score(&self) -> u16 {
-        match self {
-            QuestionEnum::SingleSelect(q) => q.cal_score(),
-            QuestionEnum::MultiSelect(q) => q.cal_score(),
-        }
-    }
-
-    fn user_input(&self) -> Option<String> {
+    pub fn user_input(&self) -> Option<String> {
         match self {
             QuestionEnum::SingleSelect(q) => q.user_input(),
             QuestionEnum::MultiSelect(q) => q.user_input(),
         }
     }
 
-    fn set_user_input(&mut self, user_input: Option<String>) {
+    pub fn set_user_input(&mut self, user_input: Option<String>) {
         match self {
             QuestionEnum::SingleSelect(q) => q.set_user_input(user_input),
             QuestionEnum::MultiSelect(q) => q.set_user_input(user_input),
@@ -138,55 +156,16 @@ impl Question for SingleSelect {
         Text::from(lines)
     }
 
-    fn option_style(
-        &self,
-        state: State,
-        i: usize,
-        user_input_idx: Option<Vec<usize>>,
-        answer_idx: Vec<usize>,
-    ) -> Style {
-        match user_input_idx {
-            None => *DEFAULT_STYLE,
-            Some(user_idx) => match state {
-                State::Ing => {
-                    if user_idx.contains(&i) {
-                        *SELECT_STYLE
-                    } else {
-                        *DEFAULT_STYLE
-                    }
-                }
-                State::End => {
-                    if answer_idx.contains(&i) && user_idx.contains(&i) {
-                        *RIGHT_STYLE
-                    } else if user_idx.contains(&i) {
-                        *WRONG_STYLE
-                    } else if answer_idx.contains(&i) {
-                        *RIGHT_STYLE
-                    } else {
-                        *DEFAULT_STYLE
-                    }
-                }
-            },
-        }
-    }
-
-    fn cal_score(&self) -> u16 {
-        self.user_input
-            .clone()
-            .map(|user_input| {
-                let user_input_set = user_input.chars().collect::<HashSet<_>>();
-                let answer_set = self.answer.chars().collect::<HashSet<_>>();
-                if user_input_set == answer_set {
-                    self.score
-                } else {
-                    0
-                }
-            })
-            .unwrap_or(0)
-    }
-
     fn user_input(&self) -> Option<String> {
         self.user_input.clone()
+    }
+
+    fn answer(&self) -> String {
+        self.answer.clone()
+    }
+
+    fn score(&self) -> u16 {
+        self.score
     }
 
     fn set_user_input(&mut self, user_input: Option<String>) {
@@ -222,55 +201,16 @@ impl Question for MultiSelect {
         Text::from(lines)
     }
 
-    fn option_style(
-        &self,
-        state: State,
-        i: usize,
-        user_input_idx: Option<Vec<usize>>,
-        answer_idx: Vec<usize>,
-    ) -> Style {
-        match user_input_idx {
-            None => *DEFAULT_STYLE,
-            Some(user_idx) => match state {
-                State::Ing => {
-                    if user_idx.contains(&i) {
-                        *SELECT_STYLE
-                    } else {
-                        *DEFAULT_STYLE
-                    }
-                }
-                State::End => {
-                    if answer_idx.contains(&i) && user_idx.contains(&i) {
-                        *RIGHT_STYLE
-                    } else if user_idx.contains(&i) {
-                        *WRONG_STYLE
-                    } else if answer_idx.contains(&i) {
-                        *RIGHT_STYLE
-                    } else {
-                        *DEFAULT_STYLE
-                    }
-                }
-            },
-        }
-    }
-
-    fn cal_score(&self) -> u16 {
-        self.user_input
-            .clone()
-            .map(|user_input| {
-                let user_input_set = user_input.chars().collect::<HashSet<_>>();
-                let answer_set = self.answer.chars().collect::<HashSet<_>>();
-                if user_input_set == answer_set {
-                    self.score
-                } else {
-                    0
-                }
-            })
-            .unwrap_or(0)
-    }
-
     fn user_input(&self) -> Option<String> {
         self.user_input.clone()
+    }
+
+    fn answer(&self) -> String {
+        self.answer.clone()
+    }
+
+    fn score(&self) -> u16 {
+        self.score
     }
 
     fn set_user_input(&mut self, user_input: Option<String>) {
@@ -299,7 +239,7 @@ mod test {
 
     #[test]
     fn test_cal_score() {
-        let mut multi_select = MultiSelect {
+        let multi_select = MultiSelect {
             question: "question".to_string(),
             options: vec!["A".to_string(), "B".to_string()],
             answer: "AB".to_string(),
@@ -308,12 +248,8 @@ mod test {
         };
         let score = multi_select.cal_score();
         assert_eq!(score, 1);
-        // multi_select.answer = "ba".to_string();
-        // assert_eq!(multi_select.cal_score(), 1)
-        let vec1 = vec![1, 2, 3];
-        let vec2 = vec![2, 1, 3];
-        // let x = vec1.iter().zip_eq(vec2.iter()).all(|(a, b)| a.eq(b));
-        // assert!(x);
+        let vec1 = [1, 2, 3];
+        let vec2 = [2, 1, 3];
         let hash_set1 = vec1.iter().collect::<HashSet<_>>();
         let hash_set2 = vec2.iter().collect::<HashSet<_>>();
         assert!(hash_set1.eq(&hash_set2));
