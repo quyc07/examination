@@ -72,7 +72,9 @@ impl Component for UserInput {
                         QuestionEnum::SingleSelect(_) => self.input_type = InputType::Fill,
                         QuestionEnum::MultiSelect(_) => self.input_type = InputType::Fill,
                         QuestionEnum::Judge(_) => self.input_type = InputType::Judge,
+                        QuestionEnum::FillIn(_) => self.input_type = InputType::Fill,
                     }
+                    // TODO 如何为填空题实现输入框？
                     self.input = q.user_input().unwrap_or_default();
                     self.question = Some(q);
                     self.state_holder.lock().unwrap().set_mode(Mode::Input);
@@ -173,7 +175,8 @@ impl UserInput {
 
     fn submit_message(&mut self) {
         let mut question = self.question.take().unwrap();
-        question.set_user_input(Some(self.input.clone()));
+        // TODO 如何给填空题填充答案？
+        question.set_user_input(question.clone());
         self.answer_tx.send(question).unwrap();
         self.reset()
     }
