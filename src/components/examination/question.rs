@@ -47,8 +47,15 @@ pub trait Question {
         self.user_input()
             .clone()
             .map(|user_input| {
-                let user_input_set = user_input.chars().collect::<HashSet<_>>();
-                let answer_set = self.answer().chars().collect::<HashSet<_>>();
+                let user_input_set = user_input
+                    .chars()
+                    .map(|c| c.to_lowercase().to_string())
+                    .collect::<HashSet<_>>();
+                let answer_set = self
+                    .answer()
+                    .chars()
+                    .map(|c| c.to_lowercase().to_string())
+                    .collect::<HashSet<_>>();
                 if user_input_set == answer_set {
                     self.score()
                 } else {
@@ -222,7 +229,7 @@ impl Question for MultiSelect {
 }
 
 impl Question for Judge {
-    fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
+    fn convert_text(&self, _state: State, q_index: usize) -> Text<'_> {
         let mut lines = vec![];
         let mut question = self.question.clone();
         if let Some(user_input) = &self.user_input {
@@ -267,7 +274,6 @@ fn to_idx(answer: &str) -> Option<usize> {
 #[cfg(test)]
 mod test {
     use crate::components::examination::question::{MultiSelect, Question};
-    use std::collections::HashSet;
 
     #[test]
     fn test_cal_score() {
@@ -275,15 +281,10 @@ mod test {
             question: "question".to_string(),
             options: vec!["A".to_string(), "B".to_string()],
             answer: "AB".to_string(),
-            user_input: Some("ab".to_string()),
+            user_input: Some("ba".to_string()),
             score: 1,
         };
         let score = multi_select.cal_score();
         assert_eq!(score, 1);
-        let vec1 = [1, 2, 3];
-        let vec2 = [2, 1, 3];
-        let hash_set1 = vec1.iter().collect::<HashSet<_>>();
-        let hash_set2 = vec2.iter().collect::<HashSet<_>>();
-        assert!(hash_set1.eq(&hash_set2));
     }
 }

@@ -65,7 +65,7 @@ impl Component for Alert {
                 frame.render_widget(help_message, help_area);
 
                 let alert = Paragraph::new(self.msg.as_str())
-                    .style(Style::default().fg(Color::Red))
+                    .style(Style::default().fg(Color::Yellow))
                     .block(Block::default().borders(Borders::ALL));
                 frame.render_widget(alert, alert_area);
             }

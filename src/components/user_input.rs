@@ -6,7 +6,6 @@ use crate::components::Component;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Alignment, Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 use std::sync::{Arc, Mutex};
@@ -33,7 +32,6 @@ pub struct UserInput {
 enum InputType {
     #[default]
     Fill,
-    Select,
     Judge,
 }
 
@@ -50,7 +48,6 @@ impl Component for UserInput {
                     KeyCode::Esc => self.close(),
                     _ => {}
                 },
-                InputType::Select => {}
                 InputType::Judge => match key.code {
                     KeyCode::Char('y') | KeyCode::Char('Y') => {
                         self.input = "Yes".to_string();
@@ -84,9 +81,6 @@ impl Component for UserInput {
             Mode::Input => match self.input_type {
                 InputType::Fill => {
                     self.draw_fill(frame, area);
-                }
-                InputType::Select => {
-                    todo!("待实现选择")
                 }
                 InputType::Judge => {
                     Self::draw_judge(frame, area);
@@ -242,23 +236,20 @@ impl UserInput {
     }
 
     fn draw_fill(&mut self, frame: &mut Frame, area: Rect) {
-        let area = centered_rect(50, 30, area);
-        let vertical = Layout::vertical([
-            Constraint::Length(1),
+        let area = centered_rect(50, 10, area);
+        frame.render_widget(
+            Block::default()
+                .title("Press Esc to stop exist, Press Enter to submit answer.")
+                .title_alignment(Alignment::Center),
+            area,
+        );
+        let [_, input_area, _] = Layout::vertical([
+            Constraint::Fill(1),
             Constraint::Length(3),
             Constraint::Fill(1),
-        ]);
-        let [help_area, input_area, _other] = vertical.areas(area);
-
-        let (msg, style) = (
-            vec!["Press Esc to stop exist, Press Enter to submit answer.".into()],
-            Style::default(),
-        );
-        let text = Text::from(Line::from(msg)).patch_style(style);
-        let help_message = Paragraph::new(text);
-        //
-        frame.render_widget(help_message, help_area);
-
+        ])
+        .areas(area);
+        let input_area = centered_rect(70, 100, input_area);
         let input = Paragraph::new(self.input.as_str())
             .style(Style::default().fg(Color::Yellow))
             .block(Block::default().borders(Borders::ALL));
@@ -266,9 +257,9 @@ impl UserInput {
         frame.set_cursor_position(Position::new(
             // Draw the cursor at the current position in the input field.
             // This position is can be controlled via the left and right arrow key
-            area.x + self.character_index as u16 + 1,
+            input_area.x + self.character_index as u16 + 1,
             // Move one line down, from the border to the input line
-            area.y + 2,
+            input_area.y + 1,
         ));
     }
 }
