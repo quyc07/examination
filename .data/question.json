@@ -44,5 +44,16 @@
       "answer": "Yes",
       "score": 1
     }
+  },
+  {
+    "FillIn": {
+      "question": "地球围绕（ ）公转。",
+      "items": [
+        {
+          "answer": "太阳",
+          "score": 1
+        }
+      ]
+    }
   }
 ]
