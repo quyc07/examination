@@ -1,43 +1,67 @@
 use crate::action::Action;
 use crate::app::{Mode, ModeHolder};
 use crate::components::area_util::centered_rect;
+use crate::components::examination::QuestionEnum;
 use crate::components::Component;
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::layout::{Constraint, Layout, Position, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tracing::info;
 
 pub struct UserInput {
     /// Current value of the input box
     input: String,
     /// 加载组件时带入的用户输入
-    origin_input: String,
+    question: Option<QuestionEnum>,
     /// Position of cursor in the editor area.
     character_index: usize,
     /// 问题请求
-    question_rx: UnboundedReceiver<String>,
+    question_rx: UnboundedReceiver<QuestionEnum>,
     /// 答案
-    answer_tx: UnboundedSender<String>,
+    answer_tx: UnboundedSender<QuestionEnum>,
     /// 全局状态
     state_holder: Arc<Mutex<ModeHolder>>,
+    /// 输入类型
+    input_type: InputType,
+}
+
+#[derive(Default)]
+enum InputType {
+    #[default]
+    Fill,
+    Select,
+    Judge,
 }
 
 impl Component for UserInput {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
         if self.get_state() == Mode::Input {
-            match key.code {
-                KeyCode::Enter => self.submit_message(),
-                KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                KeyCode::Backspace => self.delete_char(),
-                KeyCode::Left => self.move_cursor_left(),
-                KeyCode::Right => self.move_cursor_right(),
-                KeyCode::Esc => self.close(),
-                _ => {}
+            match self.input_type {
+                InputType::Fill => match key.code {
+                    KeyCode::Enter => self.submit_message(),
+                    KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                    KeyCode::Backspace => self.delete_char(),
+                    KeyCode::Left => self.move_cursor_left(),
+                    KeyCode::Right => self.move_cursor_right(),
+                    KeyCode::Esc => self.close(),
+                    _ => {}
+                },
+                InputType::Select => {}
+                InputType::Judge => match key.code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        self.input = "Yes".to_string();
+                        self.submit_message()
+                    }
+                    KeyCode::Char('n') | KeyCode::Char('N') => {
+                        self.input = "No".to_string();
+                        self.submit_message()
+                    }
+                    _ => {}
+                },
             }
         }
         Ok(None)
@@ -46,43 +70,28 @@ impl Component for UserInput {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
         match self.get_state() {
             Mode::Examination => {
-                if let Ok(user_input) = self.question_rx.try_recv() {
-                    info!("receive {user_input}");
-                    self.input = user_input.clone();
-                    self.origin_input = user_input;
+                if let Ok(q) = self.question_rx.try_recv() {
+                    match q {
+                        QuestionEnum::SingleSelect(_) => self.input_type = InputType::Fill,
+                        QuestionEnum::MultiSelect(_) => self.input_type = InputType::Fill,
+                        QuestionEnum::Judge(_) => self.input_type = InputType::Judge,
+                    }
+                    self.input = q.user_input().unwrap_or_default();
+                    self.question = Some(q);
                     self.state_holder.lock().unwrap().set_mode(Mode::Input);
                 }
             }
-            Mode::Input => {
-                let area = centered_rect(50, 30, area);
-                let vertical = Layout::vertical([
-                    Constraint::Length(1),
-                    Constraint::Length(3),
-                    Constraint::Fill(1),
-                ]);
-                let [help_area, input_area, _other] = vertical.areas(area);
-
-                let (msg, style) = (
-                    vec!["Press Esc to stop exist, Press Enter to submit answer.".into()],
-                    Style::default(),
-                );
-                let text = Text::from(Line::from(msg)).patch_style(style);
-                let help_message = Paragraph::new(text);
-                //
-                frame.render_widget(help_message, help_area);
-
-                let input = Paragraph::new(self.input.as_str())
-                    .style(Style::default().fg(Color::Yellow))
-                    .block(Block::default().borders(Borders::ALL));
-                frame.render_widget(input, input_area);
-                frame.set_cursor_position(Position::new(
-                    // Draw the cursor at the current position in the input field.
-                    // This position is can be controlled via the left and right arrow key
-                    area.x + self.character_index as u16 + 1,
-                    // Move one line down, from the border to the input line
-                    area.y + 2,
-                ));
-            }
+            Mode::Input => match self.input_type {
+                InputType::Fill => {
+                    self.draw_fill(frame, area);
+                }
+                InputType::Select => {
+                    todo!("待实现选择")
+                }
+                InputType::Judge => {
+                    Self::draw_judge(frame, area);
+                }
+            },
             _ => {}
         }
         Ok(())
@@ -91,17 +100,18 @@ impl Component for UserInput {
 
 impl UserInput {
     pub fn new(
-        question_rx: UnboundedReceiver<String>,
-        answer_tx: UnboundedSender<String>,
+        question_rx: UnboundedReceiver<QuestionEnum>,
+        answer_tx: UnboundedSender<QuestionEnum>,
         state_holder: Arc<Mutex<ModeHolder>>,
     ) -> Self {
         Self {
             input: String::new(),
-            origin_input: String::new(),
+            question: None,
             character_index: 0,
             question_rx,
             answer_tx,
             state_holder,
+            input_type: InputType::default(),
         }
     }
 
@@ -168,18 +178,97 @@ impl UserInput {
     }
 
     fn submit_message(&mut self) {
-        self.answer_tx.send(self.input.clone()).unwrap();
+        let mut question = self.question.take().unwrap();
+        question.set_user_input(Some(self.input.clone()));
+        self.answer_tx.send(question).unwrap();
         self.reset()
     }
 
     fn reset(&mut self) {
         self.input.clear();
-        self.origin_input.clear();
+        self.question.take();
         self.reset_cursor();
     }
 
     fn close(&mut self) {
-        self.answer_tx.send(self.origin_input.clone()).unwrap();
+        self.answer_tx.send(self.question.take().unwrap()).unwrap();
         self.reset()
+    }
+
+    fn draw_judge(frame: &mut Frame, area: Rect) {
+        let area = centered_rect(50, 20, area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title("Press Esc to stop exist, Press Y to answer Yes, Press N to answer No.")
+            .title_alignment(Alignment::Center);
+        frame.render_widget(block, area);
+        let [_, yes_area, no_area, _] = Layout::horizontal([
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+        ])
+        .areas(area);
+        let [_, yes_area, _] = Layout::vertical([
+            Constraint::Fill(1),
+            Constraint::Length(3),
+            Constraint::Fill(1),
+        ])
+        .areas(yes_area);
+        let [_, no_area, _] = Layout::vertical([
+            Constraint::Fill(1),
+            Constraint::Length(3),
+            Constraint::Fill(1),
+        ])
+        .areas(no_area);
+        let yes = Paragraph::new("Yes(Y)")
+            .style(Style::default().fg(Color::Yellow))
+            .alignment(Alignment::Center)
+            .block(
+                Block::default()
+                    .style(Style::default().fg(Color::Yellow))
+                    .borders(Borders::ALL),
+            );
+        frame.render_widget(yes, yes_area);
+        let no = Paragraph::new("No(N)")
+            .style(Style::default().fg(Color::Yellow))
+            .alignment(Alignment::Center)
+            .block(
+                Block::default()
+                    .style(Style::default().fg(Color::Yellow))
+                    .borders(Borders::ALL),
+            );
+        frame.render_widget(no, no_area);
+    }
+
+    fn draw_fill(&mut self, frame: &mut Frame, area: Rect) {
+        let area = centered_rect(50, 30, area);
+        let vertical = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Fill(1),
+        ]);
+        let [help_area, input_area, _other] = vertical.areas(area);
+
+        let (msg, style) = (
+            vec!["Press Esc to stop exist, Press Enter to submit answer.".into()],
+            Style::default(),
+        );
+        let text = Text::from(Line::from(msg)).patch_style(style);
+        let help_message = Paragraph::new(text);
+        //
+        frame.render_widget(help_message, help_area);
+
+        let input = Paragraph::new(self.input.as_str())
+            .style(Style::default().fg(Color::Yellow))
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(input, input_area);
+        frame.set_cursor_position(Position::new(
+            // Draw the cursor at the current position in the input field.
+            // This position is can be controlled via the left and right arrow key
+            area.x + self.character_index as u16 + 1,
+            // Move one line down, from the border to the input line
+            area.y + 2,
+        ));
     }
 }

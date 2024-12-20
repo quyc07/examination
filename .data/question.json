@@ -37,5 +37,12 @@
       "answer": "AC",
       "score": 1
     }
+  },
+  {
+    "Judge": {
+      "question": "太阳东升西落，对吗？（ ）",
+      "answer": "Yes",
+      "score": 1
+    }
   }
 ]

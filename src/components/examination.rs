@@ -3,7 +3,7 @@ mod question;
 use super::Component;
 use crate::action::ConfirmEvent;
 use crate::app::{Mode, ModeHolder};
-use crate::components::examination::question::{Question, QuestionEnum};
+use crate::components::examination::question::{Judge, MultiSelect, Question, SingleSelect};
 use crate::{action::Action, config::Config};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -12,6 +12,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Span, Text};
 use ratatui::widgets::*;
 use ratatui::Frame;
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::info;
@@ -21,8 +22,8 @@ pub struct Examination {
     config: Config,
     list_state: ListState,
     questions: Vec<QuestionEnum>,
-    question_tx: UnboundedSender<String>,
-    answer_rx: UnboundedReceiver<String>,
+    question_tx: UnboundedSender<QuestionEnum>,
+    answer_rx: UnboundedReceiver<QuestionEnum>,
     mode_holder: Arc<Mutex<ModeHolder>>,
     score: Option<u16>,
     state: State,
@@ -34,10 +35,18 @@ pub(crate) enum State {
     End,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub enum QuestionEnum {
+    SingleSelect(SingleSelect),
+    MultiSelect(MultiSelect),
+    Judge(Judge),
+    // FillIn(FillIn),
+}
+
 impl Examination {
     pub fn new(
-        question_tx: UnboundedSender<String>,
-        answer_rx: UnboundedReceiver<String>,
+        question_tx: UnboundedSender<QuestionEnum>,
+        answer_rx: UnboundedReceiver<QuestionEnum>,
         state_holder: Arc<Mutex<ModeHolder>>,
         config: Config,
     ) -> Self {
@@ -62,6 +71,7 @@ impl Examination {
             .map(|q| match q {
                 QuestionEnum::SingleSelect(q) => q.cal_score(),
                 QuestionEnum::MultiSelect(q) => q.cal_score(),
+                QuestionEnum::Judge(q) => q.cal_score(),
             })
             .sum::<u16>()
     }
@@ -98,14 +108,8 @@ impl Component for Examination {
                     // 弹框请用户输入答案
                     let idx = self.list_state.selected().unwrap();
                     info!("send {idx} to user_input");
-                    let user_input = self
-                        .questions
-                        .get_mut(idx)
-                        .unwrap()
-                        .user_input()
-                        .clone()
-                        .unwrap_or_default();
-                    self.question_tx.send(user_input).unwrap();
+                    let q = self.questions.get(idx).unwrap();
+                    self.question_tx.send(q.clone()).unwrap();
                 }
                 _ => {}
             }
@@ -138,13 +142,13 @@ impl Component for Examination {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
-        if let Ok(answer) = self.answer_rx.try_recv() {
+        if let Ok(q) = self.answer_rx.try_recv() {
             self.mode_holder.lock().unwrap().set_mode(Mode::Examination);
             let question = self
                 .questions
                 .get_mut(self.list_state.selected().unwrap())
                 .unwrap();
-            question.set_user_input(Some(answer));
+            question.set_user_input(q.user_input());
         }
         let block = Block::default()
             .borders(Borders::ALL)

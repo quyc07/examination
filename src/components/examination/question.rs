@@ -1,4 +1,4 @@
-use crate::components::examination::State;
+use crate::components::examination::{QuestionEnum, State};
 use crate::config::Config;
 use ratatui::prelude::{Line, Text};
 use ratatui::style::{Color, Style};
@@ -67,7 +67,7 @@ pub trait Question {
     fn set_user_input(&mut self, user_input: Option<String>);
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SingleSelect {
     pub question: String,
     pub options: Vec<String>,
@@ -76,7 +76,7 @@ pub struct SingleSelect {
     pub score: u16,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MultiSelect {
     pub question: String,
     pub options: Vec<String>,
@@ -85,12 +85,12 @@ pub struct MultiSelect {
     pub score: u16,
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum QuestionEnum {
-    SingleSelect(SingleSelect),
-    MultiSelect(MultiSelect),
-    // Judge(Judge),
-    // FillIn(FillIn),
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Judge {
+    pub question: String,
+    pub answer: String,
+    pub user_input: Option<String>,
+    pub score: u16,
 }
 
 impl QuestionEnum {
@@ -107,6 +107,7 @@ impl QuestionEnum {
         match self {
             QuestionEnum::SingleSelect(q) => q.convert_text(state, q_index),
             QuestionEnum::MultiSelect(q) => q.convert_text(state, q_index),
+            QuestionEnum::Judge(q) => q.convert_text(state, q_index),
         }
     }
 
@@ -114,6 +115,7 @@ impl QuestionEnum {
         match self {
             QuestionEnum::SingleSelect(q) => q.user_input(),
             QuestionEnum::MultiSelect(q) => q.user_input(),
+            QuestionEnum::Judge(q) => q.user_input(),
         }
     }
 
@@ -121,6 +123,7 @@ impl QuestionEnum {
         match self {
             QuestionEnum::SingleSelect(q) => q.set_user_input(user_input),
             QuestionEnum::MultiSelect(q) => q.set_user_input(user_input),
+            QuestionEnum::Judge(q) => q.set_user_input(user_input),
         }
     }
 }
@@ -198,6 +201,35 @@ impl Question for MultiSelect {
             let style = self.option_style(state, i, user_input_idx, answer_idx);
             lines.push(Line::from(format!("  {option}")).style(style));
         }
+        Text::from(lines)
+    }
+
+    fn user_input(&self) -> Option<String> {
+        self.user_input.clone()
+    }
+
+    fn answer(&self) -> String {
+        self.answer.clone()
+    }
+
+    fn score(&self) -> u16 {
+        self.score
+    }
+
+    fn set_user_input(&mut self, user_input: Option<String>) {
+        self.user_input = user_input;
+    }
+}
+
+impl Question for Judge {
+    fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
+        let mut lines = vec![];
+        let mut question = self.question.clone();
+        if let Some(user_input) = &self.user_input {
+            let answer = format!("（{}）", user_input);
+            question = question.replace("（ ）", answer.as_str());
+        }
+        lines.push(Line::from(format!("{}: {question}", q_index + 1)));
         Text::from(lines)
     }
 
