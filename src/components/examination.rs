@@ -147,11 +147,7 @@ impl Component for Examination {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         if let Ok(q) = self.answer_rx.try_recv() {
             self.mode_holder.lock().unwrap().set_mode(Mode::Examination);
-            let question = self
-                .questions
-                .get_mut(self.list_state.selected().unwrap())
-                .unwrap();
-            question.set_user_input(q);
+            self.questions[self.list_state.selected().unwrap()] = q;
         }
         let block = Block::default()
             .borders(Borders::ALL)

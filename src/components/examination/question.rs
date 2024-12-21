@@ -132,11 +132,11 @@ impl QuestionEnum {
         }
     }
 
-    pub fn user_input(&self) -> Option<String> {
+    pub fn user_input(&self) -> Vec<Option<String>> {
         match self {
-            QuestionEnum::SingleSelect(q) => q.user_input(),
-            QuestionEnum::MultiSelect(q) => q.user_input(),
-            QuestionEnum::Judge(q) => q.user_input(),
+            QuestionEnum::SingleSelect(q) => vec![q.user_input()],
+            QuestionEnum::MultiSelect(q) => vec![q.user_input()],
+            QuestionEnum::Judge(q) => vec![q.user_input()],
             QuestionEnum::FillIn(q) => q.user_input(),
         }
     }
@@ -150,21 +150,32 @@ impl QuestionEnum {
         }
     }
 
-    pub fn set_user_input(&mut self, q_from_user: QuestionEnum) {
-        match (self, q_from_user) {
-            (QuestionEnum::SingleSelect(q), QuestionEnum::SingleSelect(q_from_user)) => {
-                q.user_input = q_from_user.user_input.clone();
+    pub fn set_user_input(&mut self, user_input: Vec<Option<String>>) {
+        match self {
+            QuestionEnum::SingleSelect(q) => {
+                q.user_input = user_input[0].clone();
             }
-            (QuestionEnum::MultiSelect(q), QuestionEnum::MultiSelect(q_from_user)) => {
-                q.user_input = q_from_user.user_input.clone();
+            QuestionEnum::MultiSelect(q) => {
+                q.user_input = user_input[0].clone();
             }
-            (QuestionEnum::Judge(q), QuestionEnum::Judge(q_from_user)) => {
-                q.user_input = q_from_user.user_input.clone();
+            QuestionEnum::Judge(q) => {
+                q.user_input = user_input[0].clone();
             }
-            (QuestionEnum::FillIn(q), QuestionEnum::FillIn(q_from_user)) => {
-                q.items = q_from_user.items;
+            QuestionEnum::FillIn(q) => {
+                q.items
+                    .iter_mut()
+                    .zip(user_input.iter())
+                    .for_each(|(item, user_input)| item.user_input = user_input.clone());
             }
-            _ => panic!("Question type mismatch!"),
+        }
+    }
+
+    pub fn input_size(&self) -> usize {
+        match self {
+            QuestionEnum::SingleSelect(_) => 1,
+            QuestionEnum::MultiSelect(_) => 1,
+            QuestionEnum::Judge(_) => 1,
+            QuestionEnum::FillIn(q) => q.items.len(),
         }
     }
 }
@@ -297,7 +308,8 @@ impl Question for FillIn {
         let mut question = self.question.clone();
         self.items.iter().for_each(|item| {
             if let Some(user_input) = item.user_input.clone() {
-                question = question.replacen("（ ）", user_input.as_str(), 1);
+                question =
+                    question.replacen("（ ）", format!("（{}）", user_input.as_str()).as_str(), 1);
             }
         });
         lines.push(Line::from(format!("{}: {question}", q_index + 1)));
@@ -327,6 +339,15 @@ impl Question for FillIn {
     }
     fn answered(&self) -> bool {
         self.items.iter().all(|item| item.user_input.is_some())
+    }
+}
+
+impl FillIn {
+    fn user_input(&self) -> Vec<Option<String>> {
+        self.items
+            .iter()
+            .map(|item| item.user_input.clone())
+            .collect()
     }
 }
 
