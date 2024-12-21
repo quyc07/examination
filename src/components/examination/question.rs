@@ -71,7 +71,7 @@ pub trait Question {
 
     fn score(&self) -> u16;
 
-    fn set_user_input(&mut self, user_input: Option<String>);
+    fn answered(&self) -> bool;
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -100,6 +100,19 @@ pub struct Judge {
     pub score: u16,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FillIn {
+    pub question: String,
+    pub items: Vec<FillInItem>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FillInItem {
+    pub answer: String,
+    pub user_input: Option<String>,
+    pub score: u16,
+}
+
 impl QuestionEnum {
     pub(crate) fn load(config: Config) -> Vec<QuestionEnum> {
         let mut questions = String::new();
@@ -115,22 +128,54 @@ impl QuestionEnum {
             QuestionEnum::SingleSelect(q) => q.convert_text(state, q_index),
             QuestionEnum::MultiSelect(q) => q.convert_text(state, q_index),
             QuestionEnum::Judge(q) => q.convert_text(state, q_index),
+            QuestionEnum::FillIn(q) => q.convert_text(state, q_index),
         }
     }
 
-    pub fn user_input(&self) -> Option<String> {
+    pub fn user_input(&self) -> Vec<Option<String>> {
         match self {
-            QuestionEnum::SingleSelect(q) => q.user_input(),
-            QuestionEnum::MultiSelect(q) => q.user_input(),
-            QuestionEnum::Judge(q) => q.user_input(),
+            QuestionEnum::SingleSelect(q) => vec![q.user_input()],
+            QuestionEnum::MultiSelect(q) => vec![q.user_input()],
+            QuestionEnum::Judge(q) => vec![q.user_input()],
+            QuestionEnum::FillIn(q) => q.user_input(),
         }
     }
 
-    pub fn set_user_input(&mut self, user_input: Option<String>) {
+    pub fn answered(&self) -> bool {
         match self {
-            QuestionEnum::SingleSelect(q) => q.set_user_input(user_input),
-            QuestionEnum::MultiSelect(q) => q.set_user_input(user_input),
-            QuestionEnum::Judge(q) => q.set_user_input(user_input),
+            QuestionEnum::SingleSelect(q) => q.answered(),
+            QuestionEnum::MultiSelect(q) => q.answered(),
+            QuestionEnum::Judge(q) => q.answered(),
+            QuestionEnum::FillIn(q) => q.answered(),
+        }
+    }
+
+    pub fn set_user_input(&mut self, user_input: Vec<Option<String>>) {
+        match self {
+            QuestionEnum::SingleSelect(q) => {
+                q.user_input = user_input[0].clone();
+            }
+            QuestionEnum::MultiSelect(q) => {
+                q.user_input = user_input[0].clone();
+            }
+            QuestionEnum::Judge(q) => {
+                q.user_input = user_input[0].clone();
+            }
+            QuestionEnum::FillIn(q) => {
+                q.items
+                    .iter_mut()
+                    .zip(user_input.iter())
+                    .for_each(|(item, user_input)| item.user_input = user_input.clone());
+            }
+        }
+    }
+
+    pub fn input_size(&self) -> usize {
+        match self {
+            QuestionEnum::SingleSelect(_) => 1,
+            QuestionEnum::MultiSelect(_) => 1,
+            QuestionEnum::Judge(_) => 1,
+            QuestionEnum::FillIn(q) => q.items.len(),
         }
     }
 }
@@ -178,8 +223,8 @@ impl Question for SingleSelect {
         self.score
     }
 
-    fn set_user_input(&mut self, user_input: Option<String>) {
-        self.user_input = user_input;
+    fn answered(&self) -> bool {
+        self.user_input.is_some()
     }
 }
 
@@ -223,8 +268,8 @@ impl Question for MultiSelect {
         self.score
     }
 
-    fn set_user_input(&mut self, user_input: Option<String>) {
-        self.user_input = user_input;
+    fn answered(&self) -> bool {
+        self.user_input.is_some()
     }
 }
 
@@ -252,8 +297,57 @@ impl Question for Judge {
         self.score
     }
 
-    fn set_user_input(&mut self, user_input: Option<String>) {
-        self.user_input = user_input;
+    fn answered(&self) -> bool {
+        self.user_input.is_some()
+    }
+}
+
+impl Question for FillIn {
+    fn convert_text(&self, _state: State, q_index: usize) -> Text<'_> {
+        let mut lines = vec![];
+        let mut question = self.question.clone();
+        self.items.iter().for_each(|item| {
+            if let Some(user_input) = item.user_input.clone() {
+                question =
+                    question.replacen("（ ）", format!("（{}）", user_input.as_str()).as_str(), 1);
+            }
+        });
+        lines.push(Line::from(format!("{}: {question}", q_index + 1)));
+        Text::from(lines)
+    }
+
+    fn cal_score(&self) -> u16 {
+        self.items
+            .iter()
+            .map(|item| match item.user_input.clone() {
+                Some(user_input) if user_input == item.answer => item.score,
+                _ => 0,
+            })
+            .sum()
+    }
+
+    fn user_input(&self) -> Option<String> {
+        unimplemented!("无需为填空题实现该方法")
+    }
+
+    fn answer(&self) -> String {
+        unimplemented!("无需为填空题实现该方法")
+    }
+
+    fn score(&self) -> u16 {
+        unimplemented!("无需为填空题实现该方法")
+    }
+    fn answered(&self) -> bool {
+        self.items.iter().all(|item| item.user_input.is_some())
+    }
+}
+
+impl FillIn {
+    fn user_input(&self) -> Vec<Option<String>> {
+        self.items
+            .iter()
+            .map(|item| item.user_input.clone())
+            .collect()
     }
 }
 

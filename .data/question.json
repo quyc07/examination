@@ -44,5 +44,31 @@
       "answer": "Yes",
       "score": 1
     }
+  },
+  {
+    "FillIn": {
+      "question": "地球围绕（ ）公转。",
+      "items": [
+        {
+          "answer": "太阳",
+          "score": 1
+        }
+      ]
+    }
+  },
+  {
+    "FillIn": {
+      "question": "北京奥运会和冬奥会分别于（ ）年和（ ）年举行",
+      "items": [
+        {
+          "answer": "2008",
+          "score": 1
+        },
+        {
+          "answer": "2022",
+          "score": 1
+        }
+      ]
+    }
   }
 ]

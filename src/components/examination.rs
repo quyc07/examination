@@ -3,7 +3,9 @@ mod question;
 use super::Component;
 use crate::action::ConfirmEvent;
 use crate::app::{Mode, ModeHolder};
-use crate::components::examination::question::{Judge, MultiSelect, Question, SingleSelect};
+use crate::components::examination::question::{
+    FillIn, Judge, MultiSelect, Question, SingleSelect,
+};
 use crate::{action::Action, config::Config};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -40,7 +42,7 @@ pub enum QuestionEnum {
     SingleSelect(SingleSelect),
     MultiSelect(MultiSelect),
     Judge(Judge),
-    // FillIn(FillIn),
+    FillIn(FillIn),
 }
 
 impl Examination {
@@ -72,6 +74,7 @@ impl Examination {
                 QuestionEnum::SingleSelect(q) => q.cal_score(),
                 QuestionEnum::MultiSelect(q) => q.cal_score(),
                 QuestionEnum::Judge(q) => q.cal_score(),
+                QuestionEnum::FillIn(q) => q.cal_score(),
             })
             .sum::<u16>()
     }
@@ -122,7 +125,7 @@ impl Component for Examination {
             // 交卷
             Action::Submit => {
                 // 判断是否全部题目都已经做完，否则弹框提示
-                if self.questions.iter().any(|q| q.user_input().is_none()) {
+                if self.questions.iter().all(|q| q.answered()) {
                     Ok(Some(Action::Alert(
                         "还有题目未做完，是否确认交卷？".to_string(),
                         ConfirmEvent::Submit,
@@ -144,11 +147,7 @@ impl Component for Examination {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         if let Ok(q) = self.answer_rx.try_recv() {
             self.mode_holder.lock().unwrap().set_mode(Mode::Examination);
-            let question = self
-                .questions
-                .get_mut(self.list_state.selected().unwrap())
-                .unwrap();
-            question.set_user_input(q.user_input());
+            self.questions[self.list_state.selected().unwrap()] = q;
         }
         let block = Block::default()
             .borders(Borders::ALL)
