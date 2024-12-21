@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "examination"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "better-panic",
