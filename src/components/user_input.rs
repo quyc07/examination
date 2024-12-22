@@ -11,6 +11,7 @@ use ratatui::Frame;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+// TODO 需要实现widget，实现前台悬浮展示功能
 pub struct UserInput {
     /// Current value of the input box
     input: Vec<Option<String>>,
