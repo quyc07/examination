@@ -2,6 +2,8 @@ use crate::components::examination::{QuestionEnum, State};
 use crate::config::Config;
 use ratatui::prelude::{Line, Text};
 use ratatui::style::{Color, Style};
+use ratatui::text::Span;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
@@ -20,18 +22,18 @@ pub trait Question {
     ) -> Style {
         match user_input_idx {
             None => *DEFAULT_STYLE,
-            Some(user_idx) => match state {
+            Some(user_input_idx) => match state {
                 State::Ing => {
-                    if user_idx.contains(&i) {
+                    if user_input_idx.contains(&i) {
                         *SELECT_STYLE
                     } else {
                         *DEFAULT_STYLE
                     }
                 }
                 State::End => {
-                    if answer_idx.contains(&i) && user_idx.contains(&i) {
+                    if answer_idx.contains(&i) && user_input_idx.contains(&i) {
                         *RIGHT_STYLE
-                    } else if user_idx.contains(&i) {
+                    } else if user_input_idx.contains(&i) {
                         *WRONG_STYLE
                     } else if answer_idx.contains(&i) {
                         *RIGHT_STYLE
@@ -274,12 +276,40 @@ impl Question for MultiSelect {
 }
 
 impl Question for Judge {
-    fn convert_text(&self, _state: State, q_index: usize) -> Text<'_> {
+    fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
         let mut lines = vec![];
-        let mut question = self.question.clone();
+        let question = self.question.clone();
         if let Some(user_input) = &self.user_input {
-            let answer = format!("（{}）", user_input);
-            question = question.replace("（ ）", answer.as_str());
+            let pattern_en = Regex::new(r"\(\s*\)|\(\)").unwrap();
+            let pattern_cn = Regex::new(r"（\s*）|（）").unwrap();
+            if pattern_en.is_match(&question) {
+                let answer_en = format!("({})", user_input);
+                let vec = pattern_en
+                    .split(&question)
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>();
+                let question = Line::from(vec![
+                    Span::from(format!("{}:: {}", q_index + 1, vec[0].clone())),
+                    Span::styled(answer_en, self.select_style(state, user_input.as_str())),
+                    Span::from(vec[1].clone()),
+                ]);
+                lines.push(question);
+                return Text::from(lines);
+            }
+            if pattern_cn.is_match(&question) {
+                let answer_cn = format!("（{}）", user_input);
+                let vec = pattern_cn
+                    .split(&question)
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>();
+                let question = Line::from(vec![
+                    Span::from(format!("{}:: {}", q_index + 1, vec[0].clone())),
+                    Span::styled(answer_cn, self.select_style(state, user_input.as_str())),
+                    Span::from(vec[1].clone()),
+                ]);
+                lines.push(question);
+                return Text::from(lines);
+            }
         }
         lines.push(Line::from(format!("{}: {question}", q_index + 1)));
         Text::from(lines)
@@ -302,7 +332,22 @@ impl Question for Judge {
     }
 }
 
+impl Judge {
+    fn select_style(&self, state: State, user_input: &str) -> Style {
+        match state {
+            State::End => {
+                if user_input == self.answer.as_str() {
+                    return *RIGHT_STYLE;
+                }
+                *WRONG_STYLE
+            }
+            State::Ing => *SELECT_STYLE,
+        }
+    }
+}
+
 impl Question for FillIn {
+    // TODO 如何高亮显示用户输入文本，以及显示正确与错误的样式
     fn convert_text(&self, _state: State, q_index: usize) -> Text<'_> {
         let mut lines = vec![];
         let mut question = self.question.clone();
@@ -368,6 +413,7 @@ fn to_idx(answer: &str) -> Option<usize> {
 #[cfg(test)]
 mod test {
     use crate::components::examination::question::{MultiSelect, Question};
+    use regex::Regex;
 
     #[test]
     fn test_cal_score() {
@@ -380,5 +426,13 @@ mod test {
         };
         let score = multi_select.cal_score();
         assert_eq!(score, 1);
+    }
+
+    #[test]
+    fn test_regex() {
+        let pattern = Regex::new(r"\(\s*\)|\(\)|（\s*）|（）").unwrap();
+        let question = "太阳东升西落，对吗？（ ）";
+        let vec = pattern.split(question).collect::<Vec<&str>>();
+        assert_eq!(vec, vec!["太阳东升西落，对吗？", ""])
     }
 }
