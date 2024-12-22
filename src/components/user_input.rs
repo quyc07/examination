@@ -3,10 +3,12 @@ use crate::app::{Mode, ModeHolder};
 use crate::components::area_util::{centered_rect, sub_area};
 use crate::components::examination::QuestionEnum;
 use crate::components::Component;
+use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Position, Rect};
 use ratatui::style::{Color, Style};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
 use ratatui::Frame;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -36,6 +38,44 @@ enum InputType {
     #[default]
     Fill,
     Judge,
+}
+
+impl Widget for &mut UserInput {
+    fn render(mut self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
+        match self.get_state() {
+            Mode::Examination => {
+                if let Ok(q) = self.question_rx.try_recv() {
+                    match q {
+                        QuestionEnum::SingleSelect(_) => self.input_type = InputType::Fill,
+                        QuestionEnum::MultiSelect(_) => self.input_type = InputType::Fill,
+                        QuestionEnum::Judge(_) => self.input_type = InputType::Judge,
+                        QuestionEnum::FillIn(_) => self.input_type = InputType::Fill,
+                    }
+                    self.input = q.user_input();
+                    self.current_input_idx = Some(0);
+                    self.question = Some(q);
+                    self.state_holder.lock().unwrap().set_mode(Mode::Input);
+                }
+            }
+
+            Mode::Input => {
+                let area = centered_rect(50, 20, area);
+                Clear.render(area, buf);
+                match self.input_type {
+                    InputType::Fill => {
+                        self.draw_fill(area, buf);
+                    }
+                    InputType::Judge => {
+                        self.draw_judge(area, buf);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 impl Component for UserInput {
@@ -69,31 +109,8 @@ impl Component for UserInput {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-        match self.get_state() {
-            Mode::Examination => {
-                if let Ok(q) = self.question_rx.try_recv() {
-                    match q {
-                        QuestionEnum::SingleSelect(_) => self.input_type = InputType::Fill,
-                        QuestionEnum::MultiSelect(_) => self.input_type = InputType::Fill,
-                        QuestionEnum::Judge(_) => self.input_type = InputType::Judge,
-                        QuestionEnum::FillIn(_) => self.input_type = InputType::Fill,
-                    }
-                    self.input = q.user_input();
-                    self.current_input_idx = Some(0);
-                    self.question = Some(q);
-                    self.state_holder.lock().unwrap().set_mode(Mode::Input);
-                }
-            }
-            Mode::Input => match self.input_type {
-                InputType::Fill => {
-                    self.draw_fill(frame, area);
-                }
-                InputType::Judge => {
-                    Self::draw_judge(frame, area);
-                }
-            },
-            _ => {}
-        }
+        frame.render_widget(self, area);
+
         Ok(())
     }
 }
@@ -230,13 +247,14 @@ impl UserInput {
         self.reset()
     }
 
-    fn draw_judge(frame: &mut Frame, area: Rect) {
-        let area = centered_rect(50, 20, area);
-        let block = Block::default()
+    fn draw_judge(&self, area: Rect, buf: &mut Buffer) {
+        Block::default()
             .borders(Borders::ALL)
-            .title("Press Esc to stop exist, Press Y to answer Yes, Press N to answer No.")
-            .title_alignment(Alignment::Center);
-        frame.render_widget(block, area);
+            .title("Esc to exist, Y to answer Yes, N to answer No.")
+            .title_alignment(Alignment::Center)
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Cyan))
+            .render(area, buf);
         let [_, yes_area, no_area, _] = Layout::horizontal([
             Constraint::Percentage(25),
             Constraint::Percentage(25),
@@ -256,40 +274,39 @@ impl UserInput {
             Constraint::Fill(1),
         ])
         .areas(no_area);
-        let yes = Paragraph::new("Yes(Y)")
+        Paragraph::new("Yes(Y)")
             .style(Style::default().fg(Color::Yellow))
             .alignment(Alignment::Center)
             .block(
                 Block::default()
                     .style(Style::default().fg(Color::Yellow))
                     .borders(Borders::ALL),
-            );
-        frame.render_widget(yes, yes_area);
-        let no = Paragraph::new("No(N)")
+            )
+            .render(yes_area, buf);
+        Paragraph::new("No(N)")
             .style(Style::default().fg(Color::Yellow))
             .alignment(Alignment::Center)
             .block(
                 Block::default()
                     .style(Style::default().fg(Color::Yellow))
                     .borders(Borders::ALL),
-            );
-        frame.render_widget(no, no_area);
+            )
+            .render(no_area, buf);
     }
 
-    fn draw_fill(&mut self, frame: &mut Frame, area: Rect) {
-        let area = centered_rect(70, 30, area);
+    fn draw_fill(&mut self, area: Rect, buf: &mut Buffer) {
         let input_size = self.question.clone().unwrap().input_size();
         let title = if input_size == 1 {
-            "Press Esc to stop exist, Press Enter to submit answer."
+            "Esc to exist, Enter to submit answer."
         } else {
-            "Press Esc to stop exist, Press Tab to switch to next editor, Press Enter to submit answer."
+            "Esc to exist, Tab to switch, Enter to submit answer."
         };
-        frame.render_widget(
-            Block::default()
-                .title(title)
-                .title_alignment(Alignment::Center),
-            area,
-        );
+        Block::default()
+            .title(title)
+            .title_alignment(Alignment::Center)
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Cyan))
+            .render(area, buf);
         let [_blank, mut area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Fill(1)])
@@ -298,14 +315,14 @@ impl UserInput {
         for i in 0..input_size {
             let (input_area, rest) = sub_area(Constraint::Length(3), Direction::Vertical, area);
             let input_area = centered_rect(50, 100, input_area);
-            let input = Paragraph::new(self.input[i].clone().unwrap_or_default())
+            Paragraph::new(self.input[i].clone().unwrap_or_default())
                 .style(Style::default().fg(Color::Yellow))
-                .block(Block::default().borders(Borders::ALL));
-            frame.render_widget(input, input_area);
+                .block(Block::default().borders(Borders::ALL))
+                .render(input_area, buf);
             area = rest;
             input_areas.push(input_area);
         }
-        self.set_cursor_position(frame, input_areas[self.current_input_idx.unwrap()]);
+        // self.set_cursor_position(frame, input_areas[self.current_input_idx.unwrap()]);
     }
 
     fn set_cursor_position(&mut self, frame: &mut Frame, input_area: Rect) {
