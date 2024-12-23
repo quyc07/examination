@@ -348,15 +348,76 @@ impl Judge {
 
 impl Question for FillIn {
     // TODO 如何高亮显示用户输入文本，以及显示正确与错误的样式
-    fn convert_text(&self, _state: State, q_index: usize) -> Text<'_> {
+    fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
+        let question = self.question.clone();
+        let pattern_en = Regex::new(r"\(\s*\)|\(\)").unwrap();
+        let pattern_cn = Regex::new(r"（\s*）|（）").unwrap();
+        if pattern_en.is_match(&question) {
+            let mut spans = self
+                .items
+                .iter()
+                .map(|item| match item.user_input.clone() {
+                    None => Span::styled("()", *DEFAULT_STYLE),
+                    Some(user_input) => {
+                        let answer_en = format!("({})", user_input);
+                        Span::styled(answer_en, *SELECT_STYLE)
+                    }
+                })
+                .collect::<Vec<Span>>();
+            spans.push(Span::default());
+            let vec = pattern_en
+                .split(&question)
+                .enumerate()
+                .map(|(i, s)| {
+                    if i == 1 {
+                        Span::styled(format!("{}:: {}", q_index + 1, s), *DEFAULT_STYLE)
+                    } else {
+                        Span::styled(s.to_string(), *DEFAULT_STYLE)
+                    }
+                })
+                .collect::<Vec<Span>>();
+            let spans: Vec<Span> = vec
+                .into_iter()
+                .zip(spans.into_iter())
+                .map(|(s1, s2)| vec![s1, s2])
+                .flatten()
+                .collect();
+            return Text::from(Line::from(spans));
+        }
+        if pattern_cn.is_match(&question) {
+            let mut spans = self
+                .items
+                .iter()
+                .map(|item| match item.user_input.clone() {
+                    None => Span::styled("（）", *DEFAULT_STYLE),
+                    Some(user_input) => {
+                        let answer_en = format!("（{}）", user_input);
+                        Span::styled(answer_en, *SELECT_STYLE)
+                    }
+                })
+                .collect::<Vec<Span>>();
+            spans.push(Span::default());
+            let vec = pattern_cn
+                .split(&question)
+                .enumerate()
+                .map(|(i, s)| {
+                    if i == 1 {
+                        Span::styled(format!("{}:: {}", q_index + 1, s), *DEFAULT_STYLE)
+                    } else {
+                        Span::styled(s.to_string(), *DEFAULT_STYLE)
+                    }
+                })
+                .collect::<Vec<Span>>();
+            let spans: Vec<Span> = vec
+                .into_iter()
+                .zip(spans.into_iter())
+                .map(|(s1, s2)| vec![s1, s2])
+                .flatten()
+                .collect();
+            return Text::from(Line::from(spans));
+        }
         let mut lines = vec![];
-        let mut question = self.question.clone();
-        self.items.iter().for_each(|item| {
-            if let Some(user_input) = item.user_input.clone() {
-                question =
-                    question.replacen("（ ）", format!("（{}）", user_input.as_str()).as_str(), 1);
-            }
-        });
+        let question = self.question.clone();
         lines.push(Line::from(format!("{}: {question}", q_index + 1)));
         Text::from(lines)
     }
@@ -394,6 +455,18 @@ impl FillIn {
             .map(|item| item.user_input.clone())
             .collect()
     }
+
+    // fn select_style(&self, state: State, user_input: &str) -> Style {
+    // match state {
+    //     State::End => {
+    //         if user_input == self.answer.as_str() {
+    //             return *RIGHT_STYLE;
+    //         }
+    //         *WRONG_STYLE
+    //     }
+    //     State::Ing => *SELECT_STYLE,
+    // }
+    // }
 }
 
 fn to_idx(answer: &str) -> Option<usize> {
