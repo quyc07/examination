@@ -32,7 +32,7 @@ pub struct Examination {
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub(crate) enum State {
+pub enum State {
     Ing,
     End,
 }

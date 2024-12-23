@@ -24,11 +24,3 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1] // Return the middle chunk
 }
 // ANCHOR_END: centered_rect
-
-pub fn sub_area(constraint: Constraint, direction: Direction, rect: Rect) -> (Rect, Rect) {
-    let [target, rest] = Layout::default()
-        .direction(direction)
-        .constraints([constraint, Constraint::Min(0)])
-        .areas(rect);
-    (target, rest)
-}

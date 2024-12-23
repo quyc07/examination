@@ -1,9 +1,8 @@
 use crate::action::Action;
 use crate::app::{Mode, ModeHolder};
-use crate::components::area_util::{centered_rect, sub_area};
+use crate::components::area_util::centered_rect;
 use crate::components::examination::QuestionEnum;
 use crate::components::Component;
-use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Position, Rect};
@@ -31,6 +30,8 @@ pub struct UserInput {
     state_holder: Arc<Mutex<ModeHolder>>,
     /// 输入类型
     input_type: InputType,
+    /// 输入框光标位置
+    cursor_position: Option<Position>,
 }
 
 #[derive(Default)]
@@ -41,7 +42,7 @@ enum InputType {
 }
 
 impl Widget for &mut UserInput {
-    fn render(mut self, area: Rect, buf: &mut Buffer)
+    fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
     {
@@ -61,18 +62,14 @@ impl Widget for &mut UserInput {
                 }
             }
 
-            Mode::Input => {
-                let area = centered_rect(50, 20, area);
-                Clear.render(area, buf);
-                match self.input_type {
-                    InputType::Fill => {
-                        self.draw_fill(area, buf);
-                    }
-                    InputType::Judge => {
-                        self.draw_judge(area, buf);
-                    }
+            Mode::Input => match self.input_type {
+                InputType::Fill => {
+                    self.draw_fill(area, buf);
                 }
-            }
+                InputType::Judge => {
+                    self.draw_judge(area, buf);
+                }
+            },
             _ => {}
         }
     }
@@ -93,6 +90,7 @@ impl Component for UserInput {
                     _ => {}
                 },
                 InputType::Judge => match key.code {
+                    KeyCode::Esc => self.close(),
                     KeyCode::Char('y') | KeyCode::Char('Y') => {
                         self.input = vec![Some("Yes".to_string())];
                         self.submit_message()
@@ -109,8 +107,10 @@ impl Component for UserInput {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-        frame.render_widget(self, area);
-
+        frame.render_widget(&mut *self, area);
+        if let Some(position) = self.cursor_position {
+            frame.set_cursor_position(position)
+        }
         Ok(())
     }
 }
@@ -130,6 +130,7 @@ impl UserInput {
             answer_tx,
             state_holder,
             input_type: InputType::default(),
+            cursor_position: None,
         }
     }
 
@@ -197,6 +198,7 @@ impl UserInput {
 
     fn reset_cursor(&mut self) {
         self.character_index = 0;
+        self.cursor_position = None;
     }
 
     fn current_input(&self) -> String {
@@ -248,12 +250,14 @@ impl UserInput {
     }
 
     fn draw_judge(&self, area: Rect, buf: &mut Buffer) {
+        let area = centered_rect(50, 20, area);
+        Clear.render(area, buf);
         Block::default()
             .borders(Borders::ALL)
             .title("Esc to exist, Y to answer Yes, N to answer No.")
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
-            .style(Style::default().fg(Color::Cyan))
+            .style(Style::default().fg(Color::Gray).bg(Color::DarkGray))
             .render(area, buf);
         let [_, yes_area, no_area, _] = Layout::horizontal([
             Constraint::Percentage(25),
@@ -275,20 +279,20 @@ impl UserInput {
         ])
         .areas(no_area);
         Paragraph::new("Yes(Y)")
-            .style(Style::default().fg(Color::Yellow))
+            .style(Style::default())
             .alignment(Alignment::Center)
             .block(
                 Block::default()
-                    .style(Style::default().fg(Color::Yellow))
+                    .style(Style::default())
                     .borders(Borders::ALL),
             )
             .render(yes_area, buf);
         Paragraph::new("No(N)")
-            .style(Style::default().fg(Color::Yellow))
+            .style(Style::default())
             .alignment(Alignment::Center)
             .block(
                 Block::default()
-                    .style(Style::default().fg(Color::Yellow))
+                    .style(Style::default())
                     .borders(Borders::ALL),
             )
             .render(no_area, buf);
@@ -296,6 +300,18 @@ impl UserInput {
 
     fn draw_fill(&mut self, area: Rect, buf: &mut Buffer) {
         let input_size = self.question.clone().unwrap().input_size();
+        let area = centered_rect(50, 100, area);
+        let high = Self::cal_high(input_size, area);
+        let [_, area, _] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(high),
+                Constraint::Fill(1),
+            ])
+            .areas(area);
+        Clear.render(area, buf);
+
         let title = if input_size == 1 {
             "Esc to exist, Enter to submit answer."
         } else {
@@ -305,34 +321,50 @@ impl UserInput {
             .title(title)
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
-            .style(Style::default().fg(Color::Cyan))
+            .style(Style::default().fg(Color::Gray).bg(Color::DarkGray))
             .render(area, buf);
-        let [_blank, mut area] = Layout::default()
+        let [_, area, _] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Fill(1)])
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length((input_size * 3) as u16),
+                Constraint::Fill(1),
+            ])
             .areas(area);
+        let constraints = (0..input_size)
+            .map(|_| Constraint::Length(3))
+            .collect::<Vec<Constraint>>();
+        let rects = Layout::vertical(constraints).split(area);
+
         let mut input_areas = vec![];
-        for i in 0..input_size {
-            let (input_area, rest) = sub_area(Constraint::Length(3), Direction::Vertical, area);
-            let input_area = centered_rect(50, 100, input_area);
+        for i in 0..rects.len() {
+            let area = centered_rect(80, 100, rects[i]);
             Paragraph::new(self.input[i].clone().unwrap_or_default())
-                .style(Style::default().fg(Color::Yellow))
+                .style(Style::default())
                 .block(Block::default().borders(Borders::ALL))
-                .render(input_area, buf);
-            area = rest;
-            input_areas.push(input_area);
+                .render(area, buf);
+            input_areas.push(area);
         }
-        // self.set_cursor_position(frame, input_areas[self.current_input_idx.unwrap()]);
+        self.set_cursor_position(input_areas[self.current_input_idx.unwrap()]);
     }
 
-    fn set_cursor_position(&mut self, frame: &mut Frame, input_area: Rect) {
-        frame.set_cursor_position(Position::new(
+    fn cal_high(input_size: usize, area: Rect) -> u16 {
+        let total_length = (input_size * 3 + 2) as u16;
+        if area.height / 5 > total_length {
+            area.height / 5
+        } else {
+            total_length
+        }
+    }
+
+    fn set_cursor_position(&mut self, input_area: Rect) {
+        self.cursor_position = Some(Position::new(
             // Draw the cursor at the current position in the input field.
             // This position is can be controlled via the left and right arrow key
             input_area.x + self.character_index as u16 + 1,
             // Move one line down, from the border to the input line
             input_area.y + 1,
-        ));
+        ))
     }
 }
 
