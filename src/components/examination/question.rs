@@ -1,7 +1,7 @@
 use crate::components::examination::{QuestionEnum, State};
 use crate::config::Config;
 use ratatui::prelude::{Line, Text};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::sync::LazyLock;
+use std::vec;
 
 pub trait Question {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_>;
@@ -25,7 +26,7 @@ pub trait Question {
             Some(user_input_idx) => match state {
                 State::Ing => {
                     if user_input_idx.contains(&i) {
-                        *SELECT_STYLE
+                        *ING_STYLE
                     } else {
                         *DEFAULT_STYLE
                     }
@@ -183,7 +184,7 @@ impl QuestionEnum {
 }
 
 static DEFAULT_STYLE: LazyLock<Style, fn() -> Style> = LazyLock::new(Style::default);
-static SELECT_STYLE: LazyLock<Style, fn() -> Style> =
+static ING_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Yellow));
 static RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Green));
@@ -277,42 +278,42 @@ impl Question for MultiSelect {
 
 impl Question for Judge {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
-        let mut lines = vec![];
         let question = self.question.clone();
         if let Some(user_input) = &self.user_input {
             let pattern_en = Regex::new(r"\(\s*\)|\(\)").unwrap();
             let pattern_cn = Regex::new(r"（\s*）|（）").unwrap();
             if pattern_en.is_match(&question) {
-                let answer_en = format!("({})", user_input);
                 let vec = pattern_en
                     .split(&question)
                     .map(|s| s.to_string())
                     .collect::<Vec<String>>();
-                let question = Line::from(vec![
-                    Span::from(format!("{}:: {}", q_index + 1, vec[0].clone())),
-                    Span::styled(answer_en, self.select_style(state, user_input.as_str())),
-                    Span::from(vec[1].clone()),
-                ]);
-                lines.push(question);
-                return Text::from(lines);
+                let spans: Vec<Span> = vec![
+                    vec![Span::from(format!("{}: {}", q_index + 1, vec[0].clone()))],
+                    self.user_input_span(state, user_input.to_string()),
+                    vec![Span::from(vec[1].clone())],
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                return Text::from(Line::from(spans));
             }
             if pattern_cn.is_match(&question) {
-                let answer_cn = format!("（{}）", user_input);
                 let vec = pattern_cn
                     .split(&question)
                     .map(|s| s.to_string())
                     .collect::<Vec<String>>();
-                let question = Line::from(vec![
-                    Span::from(format!("{}:: {}", q_index + 1, vec[0].clone())),
-                    Span::styled(answer_cn, self.select_style(state, user_input.as_str())),
-                    Span::from(vec[1].clone()),
-                ]);
-                lines.push(question);
-                return Text::from(lines);
+                let spans: Vec<Span> = vec![
+                    vec![Span::from(format!("{}: {}", q_index + 1, vec[0].clone()))],
+                    self.user_input_span(state, user_input.to_string()),
+                    vec![Span::from(vec[1].clone())],
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                return Text::from(Line::from(spans));
             }
         }
-        lines.push(Line::from(format!("{}: {question}", q_index + 1)));
-        Text::from(lines)
+        Text::from(Line::from(format!("{}: {question}", q_index + 1)))
     }
 
     fn user_input(&self) -> Option<String> {
@@ -333,15 +334,30 @@ impl Question for Judge {
 }
 
 impl Judge {
-    fn select_style(&self, state: State, user_input: &str) -> Style {
+    fn user_input_span(&self, state: State, user_input: String) -> Vec<Span> {
         match state {
+            State::Ing => vec![Span::styled(format!("({})", user_input), *DEFAULT_STYLE)],
             State::End => {
-                if user_input == self.answer.as_str() {
-                    return *RIGHT_STYLE;
+                if self.answer == user_input {
+                    vec![
+                        Span::styled("(", *DEFAULT_STYLE),
+                        Span::styled(user_input, *RIGHT_STYLE),
+                        Span::styled(")", *DEFAULT_STYLE),
+                    ]
+                } else {
+                    vec![
+                        Span::styled("(", *DEFAULT_STYLE),
+                        Span::styled(
+                            user_input,
+                            Style::default()
+                                .fg(Color::Red)
+                                .add_modifier(Modifier::CROSSED_OUT),
+                        ),
+                        Span::styled(self.answer.clone(), Style::default().fg(Color::Green)),
+                        Span::styled(")", *DEFAULT_STYLE),
+                    ]
                 }
-                *WRONG_STYLE
             }
-            State::Ing => *SELECT_STYLE,
         }
     }
 }
@@ -357,20 +373,17 @@ impl Question for FillIn {
                 .items
                 .iter()
                 .map(|item| match item.user_input.clone() {
-                    None => Span::styled("()", *DEFAULT_STYLE),
-                    Some(user_input) => {
-                        let answer_en = format!("({})", user_input);
-                        Span::styled(answer_en, *SELECT_STYLE)
-                    }
+                    None => vec![Span::styled("()", *DEFAULT_STYLE)],
+                    Some(user_input) => item.user_input_span(state, user_input),
                 })
-                .collect::<Vec<Span>>();
-            spans.push(Span::default());
+                .collect::<Vec<Vec<Span>>>();
+            spans.push(vec![Span::default()]);
             let vec = pattern_en
                 .split(&question)
                 .enumerate()
                 .map(|(i, s)| {
-                    if i == 1 {
-                        Span::styled(format!("{}:: {}", q_index + 1, s), *DEFAULT_STYLE)
+                    if i == 0 {
+                        Span::styled(format!("{}: {}", q_index + 1, s), *DEFAULT_STYLE)
                     } else {
                         Span::styled(s.to_string(), *DEFAULT_STYLE)
                     }
@@ -379,7 +392,11 @@ impl Question for FillIn {
             let spans: Vec<Span> = vec
                 .into_iter()
                 .zip(spans.into_iter())
-                .map(|(s1, s2)| vec![s1, s2])
+                .map(|(s1, s2)| {
+                    let mut vec = vec![s1];
+                    vec.extend(s2);
+                    vec
+                })
                 .flatten()
                 .collect();
             return Text::from(Line::from(spans));
@@ -389,20 +406,17 @@ impl Question for FillIn {
                 .items
                 .iter()
                 .map(|item| match item.user_input.clone() {
-                    None => Span::styled("（）", *DEFAULT_STYLE),
-                    Some(user_input) => {
-                        let answer_en = format!("（{}）", user_input);
-                        Span::styled(answer_en, *SELECT_STYLE)
-                    }
+                    None => vec![Span::styled("（）", *DEFAULT_STYLE)],
+                    Some(user_input) => item.user_input_span(state, user_input),
                 })
-                .collect::<Vec<Span>>();
-            spans.push(Span::default());
+                .collect::<Vec<Vec<Span>>>();
+            spans.push(vec![Span::default()]);
             let vec = pattern_cn
                 .split(&question)
                 .enumerate()
                 .map(|(i, s)| {
-                    if i == 1 {
-                        Span::styled(format!("{}:: {}", q_index + 1, s), *DEFAULT_STYLE)
+                    if i == 0 {
+                        Span::styled(format!("{}: {}", q_index + 1, s), *DEFAULT_STYLE)
                     } else {
                         Span::styled(s.to_string(), *DEFAULT_STYLE)
                     }
@@ -411,7 +425,11 @@ impl Question for FillIn {
             let spans: Vec<Span> = vec
                 .into_iter()
                 .zip(spans.into_iter())
-                .map(|(s1, s2)| vec![s1, s2])
+                .map(|(s1, s2)| {
+                    let mut vec = vec![s1];
+                    vec.extend(s2);
+                    vec
+                })
                 .flatten()
                 .collect();
             return Text::from(Line::from(spans));
@@ -455,18 +473,35 @@ impl FillIn {
             .map(|item| item.user_input.clone())
             .collect()
     }
+}
 
-    // fn select_style(&self, state: State, user_input: &str) -> Style {
-    // match state {
-    //     State::End => {
-    //         if user_input == self.answer.as_str() {
-    //             return *RIGHT_STYLE;
-    //         }
-    //         *WRONG_STYLE
-    //     }
-    //     State::Ing => *SELECT_STYLE,
-    // }
-    // }
+impl FillInItem {
+    fn user_input_span(&self, state: State, user_input: String) -> Vec<Span> {
+        match state {
+            State::Ing => vec![Span::styled(format!("({})", user_input), *DEFAULT_STYLE)],
+            State::End => {
+                if self.answer == user_input {
+                    vec![
+                        Span::styled("(", *DEFAULT_STYLE),
+                        Span::styled(user_input, *RIGHT_STYLE),
+                        Span::styled(")", *DEFAULT_STYLE),
+                    ]
+                } else {
+                    vec![
+                        Span::styled("(", *DEFAULT_STYLE),
+                        Span::styled(
+                            user_input,
+                            Style::default()
+                                .fg(Color::Red)
+                                .add_modifier(Modifier::CROSSED_OUT),
+                        ),
+                        Span::styled(self.answer.clone(), Style::default().fg(Color::Green)),
+                        Span::styled(")", *DEFAULT_STYLE),
+                    ]
+                }
+            }
+        }
+    }
 }
 
 fn to_idx(answer: &str) -> Option<usize> {
