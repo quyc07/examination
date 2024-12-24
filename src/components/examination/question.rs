@@ -188,8 +188,11 @@ static ING_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Yellow));
 static RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Green));
-static WRONG_STYLE: LazyLock<Style, fn() -> Style> =
-    LazyLock::new(|| Style::default().fg(Color::Red));
+static WRONG_STYLE: LazyLock<Style, fn() -> Style> = LazyLock::new(|| {
+    Style::default()
+        .fg(Color::Red)
+        .add_modifier(Modifier::CROSSED_OUT)
+});
 
 impl Question for SingleSelect {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
@@ -289,7 +292,7 @@ impl Question for Judge {
                     .collect::<Vec<String>>();
                 let spans: Vec<Span> = vec![
                     vec![Span::from(format!("{}: {}", q_index + 1, vec[0].clone()))],
-                    self.user_input_span(state, user_input.to_string()),
+                    user_input_span(state, user_input.to_string(), self.answer.clone(), Lang::EN),
                     vec![Span::from(vec[1].clone())],
                 ]
                 .into_iter()
@@ -304,7 +307,7 @@ impl Question for Judge {
                     .collect::<Vec<String>>();
                 let spans: Vec<Span> = vec![
                     vec![Span::from(format!("{}: {}", q_index + 1, vec[0].clone()))],
-                    self.user_input_span(state, user_input.to_string()),
+                    user_input_span(state, user_input.to_string(), self.answer.clone(), Lang::CN),
                     vec![Span::from(vec[1].clone())],
                 ]
                 .into_iter()
@@ -333,30 +336,45 @@ impl Question for Judge {
     }
 }
 
-impl Judge {
-    fn user_input_span(&self, state: State, user_input: String) -> Vec<Span> {
-        match state {
-            State::Ing => vec![Span::styled(format!("({})", user_input), *DEFAULT_STYLE)],
-            State::End => {
-                if self.answer == user_input {
-                    vec![
-                        Span::styled("(", *DEFAULT_STYLE),
-                        Span::styled(user_input, *RIGHT_STYLE),
-                        Span::styled(")", *DEFAULT_STYLE),
-                    ]
-                } else {
-                    vec![
-                        Span::styled("(", *DEFAULT_STYLE),
-                        Span::styled(
-                            user_input,
-                            Style::default()
-                                .fg(Color::Red)
-                                .add_modifier(Modifier::CROSSED_OUT),
-                        ),
-                        Span::styled(self.answer.clone(), Style::default().fg(Color::Green)),
-                        Span::styled(")", *DEFAULT_STYLE),
-                    ]
-                }
+enum Lang {
+    EN,
+    CN,
+}
+impl Lang {
+    fn parentheses(&self) -> (String, String) {
+        match self {
+            Lang::EN => ("(".to_string(), ")".to_string()),
+            Lang::CN => ("（".to_string(), "）".to_string()),
+        }
+    }
+}
+
+fn user_input_span(
+    state: State,
+    user_input: String,
+    answer: String,
+    lang: Lang,
+) -> Vec<Span<'static>> {
+    match state {
+        State::Ing => vec![
+            Span::styled(lang.parentheses().0.clone(), *DEFAULT_STYLE),
+            Span::styled(user_input, *DEFAULT_STYLE),
+            Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
+        ],
+        State::End => {
+            if answer == user_input {
+                vec![
+                    Span::styled(lang.parentheses().0, *DEFAULT_STYLE),
+                    Span::styled(user_input, *RIGHT_STYLE),
+                    Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
+                ]
+            } else {
+                vec![
+                    Span::styled(lang.parentheses().0, *DEFAULT_STYLE),
+                    Span::styled(user_input, *WRONG_STYLE),
+                    Span::styled(answer.clone(), *RIGHT_STYLE),
+                    Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
+                ]
             }
         }
     }
@@ -373,8 +391,16 @@ impl Question for FillIn {
                 .items
                 .iter()
                 .map(|item| match item.user_input.clone() {
-                    None => vec![Span::styled("()", *DEFAULT_STYLE)],
-                    Some(user_input) => item.user_input_span(state, user_input),
+                    None => vec![
+                        Span::styled(Lang::EN.parentheses().0, *DEFAULT_STYLE),
+                        Span::styled(Lang::EN.parentheses().1, *DEFAULT_STYLE),
+                    ],
+                    Some(user_input) => user_input_span(
+                        state,
+                        user_input.to_string(),
+                        item.answer.clone(),
+                        Lang::EN,
+                    ),
                 })
                 .collect::<Vec<Vec<Span>>>();
             spans.push(vec![Span::default()]);
@@ -391,13 +417,12 @@ impl Question for FillIn {
                 .collect::<Vec<Span>>();
             let spans: Vec<Span> = vec
                 .into_iter()
-                .zip(spans.into_iter())
-                .map(|(s1, s2)| {
+                .zip(spans)
+                .flat_map(|(s1, s2)| {
                     let mut vec = vec![s1];
                     vec.extend(s2);
                     vec
                 })
-                .flatten()
                 .collect();
             return Text::from(Line::from(spans));
         }
@@ -406,8 +431,16 @@ impl Question for FillIn {
                 .items
                 .iter()
                 .map(|item| match item.user_input.clone() {
-                    None => vec![Span::styled("（）", *DEFAULT_STYLE)],
-                    Some(user_input) => item.user_input_span(state, user_input),
+                    None => vec![
+                        Span::styled(Lang::CN.parentheses().0, *DEFAULT_STYLE),
+                        Span::styled(Lang::CN.parentheses().1, *DEFAULT_STYLE),
+                    ],
+                    Some(user_input) => user_input_span(
+                        state,
+                        user_input.to_string(),
+                        item.answer.clone(),
+                        Lang::CN,
+                    ),
                 })
                 .collect::<Vec<Vec<Span>>>();
             spans.push(vec![Span::default()]);
@@ -424,13 +457,12 @@ impl Question for FillIn {
                 .collect::<Vec<Span>>();
             let spans: Vec<Span> = vec
                 .into_iter()
-                .zip(spans.into_iter())
-                .map(|(s1, s2)| {
+                .zip(spans)
+                .flat_map(|(s1, s2)| {
                     let mut vec = vec![s1];
                     vec.extend(s2);
                     vec
                 })
-                .flatten()
                 .collect();
             return Text::from(Line::from(spans));
         }
@@ -472,35 +504,6 @@ impl FillIn {
             .iter()
             .map(|item| item.user_input.clone())
             .collect()
-    }
-}
-
-impl FillInItem {
-    fn user_input_span(&self, state: State, user_input: String) -> Vec<Span> {
-        match state {
-            State::Ing => vec![Span::styled(format!("({})", user_input), *DEFAULT_STYLE)],
-            State::End => {
-                if self.answer == user_input {
-                    vec![
-                        Span::styled("(", *DEFAULT_STYLE),
-                        Span::styled(user_input, *RIGHT_STYLE),
-                        Span::styled(")", *DEFAULT_STYLE),
-                    ]
-                } else {
-                    vec![
-                        Span::styled("(", *DEFAULT_STYLE),
-                        Span::styled(
-                            user_input,
-                            Style::default()
-                                .fg(Color::Red)
-                                .add_modifier(Modifier::CROSSED_OUT),
-                        ),
-                        Span::styled(self.answer.clone(), Style::default().fg(Color::Green)),
-                        Span::styled(")", *DEFAULT_STYLE),
-                    ]
-                }
-            }
-        }
     }
 }
 
