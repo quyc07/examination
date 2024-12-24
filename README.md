@@ -11,7 +11,7 @@
 
 ## 安装
 
-可食用cargo直接安装
+可使用cargo直接安装
 ```shell
 cargo install examination
 ```
