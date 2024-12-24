@@ -3,10 +3,11 @@ use crate::app::{Mode, ModeHolder};
 use crate::components::area_util::centered_rect;
 use crate::components::Component;
 use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
 use ratatui::Frame;
 use std::sync::{Arc, Mutex};
 
@@ -17,6 +18,42 @@ pub struct Alert {
     mode_holder: Arc<Mutex<ModeHolder>>,
     /// 确认事件
     confirm_event: ConfirmEvent,
+}
+
+impl Widget for &mut Alert {
+    fn render(self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
+        match self.get_state() {
+            Mode::Examination => {}
+            Mode::Input => {}
+            Mode::Alert => {
+                let area = centered_rect(50, 100, area);
+                let [_, alert_area, _] = Layout::vertical([
+                    Constraint::Fill(1),
+                    Constraint::Length(4),
+                    Constraint::Fill(1),
+                ])
+                .areas(area);
+                Clear.render(alert_area, buf);
+                let [help_area, msg_area] =
+                    Layout::vertical([Constraint::Length(1), Constraint::Length(3)])
+                        .areas(alert_area);
+                let (msg, style) = (
+                    vec!["Esc to quit, Enter to submit.".into()],
+                    Style::default(),
+                );
+                let text = Text::from(Line::from(msg)).patch_style(style);
+                let help_message = Paragraph::new(text);
+                help_message.render(help_area, buf);
+                let msg = Paragraph::new(self.msg.as_str())
+                    .style(Style::default().fg(Color::Yellow))
+                    .block(Block::default().borders(Borders::ALL));
+                msg.render(msg_area, buf);
+            }
+        }
+    }
 }
 
 impl Component for Alert {
@@ -44,32 +81,7 @@ impl Component for Alert {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-        match self.get_state() {
-            Mode::Examination => {}
-            Mode::Input => {}
-            Mode::Alert => {
-                let area = centered_rect(50, 30, area);
-                let vertical = Layout::vertical([
-                    Constraint::Length(1),
-                    Constraint::Length(3),
-                    Constraint::Fill(1),
-                ]);
-                let [help_area, alert_area, _other] = vertical.areas(area);
-
-                let (msg, style) = (
-                    vec!["Press Esc to quit, Press Enter to submit.".into()],
-                    Style::default(),
-                );
-                let text = Text::from(Line::from(msg)).patch_style(style);
-                let help_message = Paragraph::new(text);
-                frame.render_widget(help_message, help_area);
-
-                let alert = Paragraph::new(self.msg.as_str())
-                    .style(Style::default().fg(Color::Yellow))
-                    .block(Block::default().borders(Borders::ALL));
-                frame.render_widget(alert, alert_area);
-            }
-        }
+        frame.render_widget(&mut *self, area);
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 use crate::components::examination::{QuestionEnum, State};
 use crate::config::Config;
 use ratatui::prelude::{Line, Text};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::sync::LazyLock;
+use std::vec;
 
 pub trait Question {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_>;
@@ -25,7 +26,7 @@ pub trait Question {
             Some(user_input_idx) => match state {
                 State::Ing => {
                     if user_input_idx.contains(&i) {
-                        *SELECT_STYLE
+                        *ING_STYLE
                     } else {
                         *DEFAULT_STYLE
                     }
@@ -46,9 +47,17 @@ pub trait Question {
     }
 
     fn cal_score(&self) -> u16 {
-        self.user_input()
-            .clone()
-            .map(|user_input| {
+        if self.check_answer() {
+            self.score()
+        } else {
+            0
+        }
+    }
+
+    fn check_answer(&self) -> bool {
+        match self.user_input() {
+            None => false,
+            Some(user_input) => {
                 let user_input_set = user_input
                     .chars()
                     .map(|c| c.to_lowercase().to_string())
@@ -58,22 +67,75 @@ pub trait Question {
                     .chars()
                     .map(|c| c.to_lowercase().to_string())
                     .collect::<HashSet<_>>();
-                if user_input_set == answer_set {
-                    self.score()
-                } else {
-                    0
-                }
-            })
-            .unwrap_or(0)
+                user_input_set == answer_set
+            }
+        }
     }
 
     fn user_input(&self) -> Option<String>;
 
     fn answer(&self) -> String;
+    fn question(&self) -> String;
 
     fn score(&self) -> u16;
 
     fn answered(&self) -> bool;
+
+    fn convert_question(&self, state: State, q_index: usize) -> Line {
+        let question = self.question();
+        let lang = Lang::check(&question);
+        let line = match self.user_input() {
+            Some(user_input) => {
+                let vec = lang
+                    .pattern()
+                    .split(&question)
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>();
+                let spans: Vec<Span> = vec![
+                    vec![Span::from(format!("{}: {}", q_index + 1, vec[0].clone()))],
+                    self.user_input_span(state, user_input.to_string(), self.answer(), lang),
+                    vec![Span::from(vec[1].clone())],
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                Line::from(spans)
+            }
+            None => Line::from(format!("{}: {question}", q_index + 1)),
+        };
+        line
+    }
+    fn user_input_span(
+        &self,
+        state: State,
+        user_input: String,
+        answer: String,
+        lang: Lang,
+    ) -> Vec<Span<'static>> {
+        match state {
+            State::Ing => vec![
+                Span::styled(lang.parentheses().0.clone(), *DEFAULT_STYLE),
+                Span::styled(user_input, *DEFAULT_STYLE),
+                Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
+            ],
+            State::End => {
+                if self.check_answer() {
+                    vec![
+                        Span::styled(lang.parentheses().0, *DEFAULT_STYLE),
+                        Span::styled(user_input, *RIGHT_STYLE),
+                        Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
+                    ]
+                } else {
+                    vec![
+                        Span::styled(lang.parentheses().0, *DEFAULT_STYLE),
+                        Span::styled(user_input, *WRONG_STYLE),
+                        Span::styled(answer.clone(), *RIGHT_STYLE),
+                        Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
+                    ]
+                }
+            }
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -183,22 +245,21 @@ impl QuestionEnum {
 }
 
 static DEFAULT_STYLE: LazyLock<Style, fn() -> Style> = LazyLock::new(Style::default);
-static SELECT_STYLE: LazyLock<Style, fn() -> Style> =
+static ING_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Yellow));
 static RIGHT_STYLE: LazyLock<Style, fn() -> Style> =
     LazyLock::new(|| Style::default().fg(Color::Green));
-static WRONG_STYLE: LazyLock<Style, fn() -> Style> =
-    LazyLock::new(|| Style::default().fg(Color::Red));
+static WRONG_STYLE: LazyLock<Style, fn() -> Style> = LazyLock::new(|| {
+    Style::default()
+        .fg(Color::Red)
+        .add_modifier(Modifier::CROSSED_OUT)
+});
 
 impl Question for SingleSelect {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
         let mut lines = vec![];
-        let mut question = self.question.clone();
-        if let Some(user_input) = &self.user_input {
-            let answer = format!("（{}）", user_input);
-            question = question.replace("（ ）", answer.as_str());
-        }
-        lines.push(Line::from(format!("{}: {question}", q_index + 1)));
+        let line = self.convert_question(state, q_index);
+        lines.push(line);
         for (i, option) in self.options.iter().enumerate() {
             let user_input_idx = self
                 .user_input
@@ -208,7 +269,7 @@ impl Question for SingleSelect {
                 .map(|i| vec![i])
                 .unwrap();
             let style = self.option_style(state, i, user_input_idx, answer_idx);
-            lines.push(Line::from(format!("  {option}")).style(style));
+            lines.push(Line::from(Span::styled(format!("  {option}"), style)));
         }
         Text::from(lines)
     }
@@ -219,6 +280,10 @@ impl Question for SingleSelect {
 
     fn answer(&self) -> String {
         self.answer.clone()
+    }
+
+    fn question(&self) -> String {
+        self.question.clone()
     }
 
     fn score(&self) -> u16 {
@@ -233,12 +298,8 @@ impl Question for SingleSelect {
 impl Question for MultiSelect {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
         let mut lines = vec![];
-        let mut question = self.question.clone();
-        if let Some(user_input) = &self.user_input {
-            let answer = format!("（{}）", user_input);
-            question = question.replace("（ ）", answer.as_str());
-        }
-        lines.push(Line::from(format!("{}: {question}", q_index + 1)));
+        let line = self.convert_question(state, q_index);
+        lines.push(line);
         for (i, option) in self.options.iter().enumerate() {
             let user_input_idx = self.user_input.clone().map(|user_input| {
                 user_input
@@ -253,7 +314,7 @@ impl Question for MultiSelect {
                 .filter_map(|c| to_idx(c.to_string().as_str()))
                 .collect();
             let style = self.option_style(state, i, user_input_idx, answer_idx);
-            lines.push(Line::from(format!("  {option}")).style(style));
+            lines.push(Line::from(Span::styled(format!("  {option}"), style)));
         }
         Text::from(lines)
     }
@@ -265,7 +326,9 @@ impl Question for MultiSelect {
     fn answer(&self) -> String {
         self.answer.clone()
     }
-
+    fn question(&self) -> String {
+        self.question.clone()
+    }
     fn score(&self) -> u16 {
         self.score
     }
@@ -277,42 +340,7 @@ impl Question for MultiSelect {
 
 impl Question for Judge {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
-        let mut lines = vec![];
-        let question = self.question.clone();
-        if let Some(user_input) = &self.user_input {
-            let pattern_en = Regex::new(r"\(\s*\)|\(\)").unwrap();
-            let pattern_cn = Regex::new(r"（\s*）|（）").unwrap();
-            if pattern_en.is_match(&question) {
-                let answer_en = format!("({})", user_input);
-                let vec = pattern_en
-                    .split(&question)
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>();
-                let question = Line::from(vec![
-                    Span::from(format!("{}:: {}", q_index + 1, vec[0].clone())),
-                    Span::styled(answer_en, self.select_style(state, user_input.as_str())),
-                    Span::from(vec[1].clone()),
-                ]);
-                lines.push(question);
-                return Text::from(lines);
-            }
-            if pattern_cn.is_match(&question) {
-                let answer_cn = format!("（{}）", user_input);
-                let vec = pattern_cn
-                    .split(&question)
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>();
-                let question = Line::from(vec![
-                    Span::from(format!("{}:: {}", q_index + 1, vec[0].clone())),
-                    Span::styled(answer_cn, self.select_style(state, user_input.as_str())),
-                    Span::from(vec[1].clone()),
-                ]);
-                lines.push(question);
-                return Text::from(lines);
-            }
-        }
-        lines.push(Line::from(format!("{}: {question}", q_index + 1)));
-        Text::from(lines)
+        Text::from(self.convert_question(state, q_index))
     }
 
     fn user_input(&self) -> Option<String> {
@@ -322,7 +350,9 @@ impl Question for Judge {
     fn answer(&self) -> String {
         self.answer.clone()
     }
-
+    fn question(&self) -> String {
+        self.question.clone()
+    }
     fn score(&self) -> u16 {
         self.score
     }
@@ -332,33 +362,77 @@ impl Question for Judge {
     }
 }
 
-impl Judge {
-    fn select_style(&self, state: State, user_input: &str) -> Style {
-        match state {
-            State::End => {
-                if user_input == self.answer.as_str() {
-                    return *RIGHT_STYLE;
-                }
-                *WRONG_STYLE
-            }
-            State::Ing => *SELECT_STYLE,
+#[derive(Copy, Clone)]
+pub enum Lang {
+    EN,
+    CN,
+}
+impl Lang {
+    fn parentheses(&self) -> (String, String) {
+        match self {
+            Lang::EN => ("(".to_string(), ")".to_string()),
+            Lang::CN => ("（".to_string(), "）".to_string()),
         }
+    }
+
+    fn pattern(&self) -> Regex {
+        match self {
+            Lang::EN => Regex::new(r"\(\s*\)|\(\)").unwrap(),
+            Lang::CN => Regex::new(r"（\s*）|（）").unwrap(),
+        }
+    }
+
+    fn check(question: &str) -> Self {
+        if Lang::CN.pattern().is_match(question) {
+            return Lang::CN;
+        } else if Lang::EN.pattern().is_match(question) {
+            return Lang::EN;
+        }
+        panic!("为能判断中英文括号")
     }
 }
 
 impl Question for FillIn {
-    // TODO 如何高亮显示用户输入文本，以及显示正确与错误的样式
-    fn convert_text(&self, _state: State, q_index: usize) -> Text<'_> {
-        let mut lines = vec![];
-        let mut question = self.question.clone();
-        self.items.iter().for_each(|item| {
-            if let Some(user_input) = item.user_input.clone() {
-                question =
-                    question.replacen("（ ）", format!("（{}）", user_input.as_str()).as_str(), 1);
-            }
-        });
-        lines.push(Line::from(format!("{}: {question}", q_index + 1)));
-        Text::from(lines)
+    fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {
+        let question = self.question.clone();
+        let lang = Lang::check(question.as_str());
+        let vec = lang
+            .pattern()
+            .split(&question)
+            .enumerate()
+            .map(|(i, s)| {
+                if i == 0 {
+                    Span::styled(format!("{}: {}", q_index + 1, s), *DEFAULT_STYLE)
+                } else {
+                    Span::styled(s.to_string(), *DEFAULT_STYLE)
+                }
+            })
+            .collect::<Vec<Span>>();
+
+        let mut spans = self
+            .items
+            .iter()
+            .map(|item| match item.user_input.clone() {
+                None => vec![
+                    Span::styled(lang.parentheses().0, *DEFAULT_STYLE),
+                    Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
+                ],
+                Some(user_input) => {
+                    self.user_input_span(state, user_input.to_string(), item.answer.clone(), lang)
+                }
+            })
+            .collect::<Vec<Vec<Span>>>();
+        spans.push(vec![Span::default()]);
+        let spans: Vec<Span> = vec
+            .into_iter()
+            .zip(spans)
+            .flat_map(|(s1, s2)| {
+                let mut vec = vec![s1];
+                vec.extend(s2);
+                vec
+            })
+            .collect();
+        Text::from(Line::from(spans))
     }
 
     fn cal_score(&self) -> u16 {
@@ -378,7 +452,9 @@ impl Question for FillIn {
     fn answer(&self) -> String {
         unimplemented!("无需为填空题实现该方法")
     }
-
+    fn question(&self) -> String {
+        self.question.clone()
+    }
     fn score(&self) -> u16 {
         unimplemented!("无需为填空题实现该方法")
     }
