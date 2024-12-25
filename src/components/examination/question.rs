@@ -1,11 +1,15 @@
-use crate::components::examination::{QuestionEnum, State};
+use crate::components::examination::{ExaminationConfig, QuestionEnum, State};
 use crate::config::Config;
+use itertools::Itertools;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use ratatui::prelude::{Line, Text};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::cmp::min;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::sync::LazyLock;
@@ -177,14 +181,68 @@ pub struct FillInItem {
     pub score: u16,
 }
 
+#[derive(Serialize, Deserialize)]
+struct Examination {
+    name: String,
+    single_select: usize,
+    multi_select: usize,
+    judge: usize,
+    fill_in: usize,
+}
+
 impl QuestionEnum {
-    pub(crate) fn load(config: Config) -> Vec<QuestionEnum> {
+    fn name(&self) -> &'static str {
+        match self {
+            QuestionEnum::SingleSelect(_) => Self::SINGLE_SELECT,
+            QuestionEnum::MultiSelect(_) => Self::MULTI_SELECT,
+            QuestionEnum::Judge(_) => Self::JUDGE,
+            QuestionEnum::FillIn(_) => Self::FILL_IN,
+        }
+    }
+
+    const SINGLE_SELECT: &'static str = "SingleSelect";
+    const MULTI_SELECT: &'static str = "MultiSelect";
+    const JUDGE: &'static str = "Judge";
+    const FILL_IN: &'static str = "FillIn";
+
+    pub(crate) fn load(config: Config, ec: ExaminationConfig) -> Vec<QuestionEnum> {
         let mut questions = String::new();
         File::open(config.config.data_dir.join("question.json"))
             .unwrap()
             .read_to_string(&mut questions)
             .expect("Fail to load question!");
-        serde_json::from_slice::<Vec<QuestionEnum>>(questions.as_ref()).unwrap()
+        let questions = serde_json::from_slice::<Vec<QuestionEnum>>(questions.as_ref()).unwrap();
+        let question_name_2_vec = questions.into_iter().into_group_map_by(|q| q.name());
+        let mut single_select: Vec<QuestionEnum> = Self::random_choose_question(
+            &question_name_2_vec,
+            Self::SINGLE_SELECT,
+            ec.single_select,
+        );
+        let multi_select: Vec<QuestionEnum> =
+            Self::random_choose_question(&question_name_2_vec, Self::MULTI_SELECT, ec.multi_select);
+        let judge: Vec<QuestionEnum> =
+            Self::random_choose_question(&question_name_2_vec, Self::JUDGE, ec.judge);
+        let fill_in: Vec<QuestionEnum> =
+            Self::random_choose_question(&question_name_2_vec, Self::FILL_IN, ec.fill_in);
+        single_select.extend(multi_select);
+        single_select.extend(judge);
+        single_select.extend(fill_in);
+        single_select
+    }
+
+    fn random_choose_question(
+        question_name_2_vec: &HashMap<&str, Vec<QuestionEnum>>,
+        question_name: &str,
+        question_size: usize,
+    ) -> Vec<QuestionEnum> {
+        question_name_2_vec
+            .get(question_name)
+            .map(|v| {
+                let n = min(v.len(), question_size);
+                let mut rng = thread_rng();
+                v.choose_multiple(&mut rng, n).cloned().collect()
+            })
+            .unwrap_or_default()
     }
 
     pub fn convert_text(&self, state: State, q_index: usize) -> Text<'_> {

@@ -15,11 +15,14 @@ use ratatui::text::{Span, Text};
 use ratatui::widgets::*;
 use ratatui::Frame;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Read;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::info;
 
 pub struct Examination {
+    examination_config: ExaminationConfig,
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
     list_state: ListState,
@@ -29,6 +32,15 @@ pub struct Examination {
     mode_holder: Arc<Mutex<ModeHolder>>,
     score: Option<u16>,
     state: State,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ExaminationConfig {
+    name: String,
+    single_select: usize,
+    multi_select: usize,
+    judge: usize,
+    fill_in: usize,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -52,11 +64,13 @@ impl Examination {
         state_holder: Arc<Mutex<ModeHolder>>,
         config: Config,
     ) -> Self {
+        let examination_config = Self::load(config.clone());
         let mut examination = Self {
+            examination_config: examination_config.clone(),
             command_tx: None,
             config: config.clone(),
             list_state: Default::default(),
-            questions: QuestionEnum::load(config),
+            questions: QuestionEnum::load(config, examination_config),
             question_tx,
             answer_rx,
             mode_holder: state_holder,
@@ -65,6 +79,15 @@ impl Examination {
         };
         examination.list_state.select_first();
         examination
+    }
+
+    fn load(config: Config) -> ExaminationConfig {
+        let mut ec = String::new();
+        File::open(config.config.data_dir.join("examination.json"))
+            .unwrap()
+            .read_to_string(&mut ec)
+            .expect("Fail to load question!");
+        serde_json::from_slice::<ExaminationConfig>(ec.as_ref()).unwrap()
     }
 
     fn cal_score(&self) -> u16 {
@@ -152,7 +175,7 @@ impl Component for Examination {
         let block = Block::default()
             .borders(Borders::ALL)
             .title(Span::styled(
-                "***考试",
+                &self.examination_config.name,
                 Style::default().add_modifier(Modifier::BOLD),
             ))
             .title_alignment(Alignment::Center)

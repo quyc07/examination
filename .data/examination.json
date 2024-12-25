@@ -1,0 +1,7 @@
+{
+  "name": "一场简单考试",
+  "single_select": 5,
+  "multi_select": 10,
+  "judge": 5,
+  "fill_in": 10
+}
