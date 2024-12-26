@@ -1,3 +1,8 @@
+
+[![](https://img.shields.io/crates/v/examination)](https://crates.io/crates/examination)
+[![](https://img.shields.io/crates/l/examination)](https://www.apache.org/licenses/LICENSE-2.0.txt)
+[![](https://img.shields.io/github/workflow/status/quyc07/examination/examination/ci)](https://github.com/quyc07/examination/actions/workflows/ci.yml)
+
 # examination
 
 一个简单的考试命令行工具，通过读取本地试题库json文件生成考试题目，支持用户通过命令行进行作答，提交考卷后可计算得分，并高亮显示错题。
@@ -51,6 +56,7 @@ examination
 - [X] 支持从题库中随机出题
 - [ ] 支持错题记录
 - [ ] 支持错题重做
+
 
 
 
