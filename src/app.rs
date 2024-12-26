@@ -7,10 +7,11 @@ use tokio::sync::mpsc;
 use tracing::{debug, info};
 
 use crate::components::alert::Alert;
+use crate::components::timer::Timer;
 use crate::components::user_input::UserInput;
 use crate::{
     action::Action,
-    components::{examination::Examination, fps::FpsCounter, Component},
+    components::{examination::Examination, Component},
     config::Config,
     tui::{Event, Tui},
 };
@@ -54,6 +55,7 @@ impl App {
         let (answer_tx, answer_rx) = mpsc::unbounded_channel();
         let mode_holder = Arc::new(Mutex::new(ModeHolder::default()));
         let config = Config::new()?;
+        let examination_config = Examination::load(config.clone());
         Ok(Self {
             tick_rate,
             frame_rate,
@@ -64,10 +66,11 @@ impl App {
                     answer_rx,
                     mode_holder.clone(),
                     config.clone(),
+                    examination_config.clone(),
                 )),
                 Box::new(UserInput::new(question_rx, answer_tx, mode_holder.clone())),
                 Box::new(Alert::new(mode_holder.clone())),
-                Box::new(FpsCounter::default()),
+                Box::new(Timer::new(examination_config.duration())),
             ],
             should_quit: false,
             should_suspend: false,

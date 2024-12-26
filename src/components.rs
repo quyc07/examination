@@ -12,6 +12,7 @@ pub mod alert;
 mod area_util;
 pub mod examination;
 pub mod fps;
+pub mod timer;
 pub mod user_input;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.

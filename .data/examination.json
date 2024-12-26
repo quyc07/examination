@@ -1,5 +1,6 @@
 {
   "name": "一场简单考试",
+  "duration": 300,
   "single_select": 5,
   "multi_select": 10,
   "judge": 5,

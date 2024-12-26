@@ -44,6 +44,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter", "serde"] }
 regex = "1.11.1"
 itertools = "0.13.0"
 rand = "0.8.5"
+chrono = "0.4.39"
 [build-dependencies]
 anyhow = "1.0.90"
 vergen-gix = { version = "1.0.2", features = ["build", "cargo"] }

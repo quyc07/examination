@@ -37,10 +37,17 @@ pub struct Examination {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ExaminationConfig {
     name: String,
+    duration: u64,
     single_select: usize,
     multi_select: usize,
     judge: usize,
     fill_in: usize,
+}
+
+impl ExaminationConfig {
+    pub fn duration(&self) -> u64 {
+        self.duration
+    }
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -63,14 +70,14 @@ impl Examination {
         answer_rx: UnboundedReceiver<QuestionEnum>,
         state_holder: Arc<Mutex<ModeHolder>>,
         config: Config,
+        ec: ExaminationConfig,
     ) -> Self {
-        let examination_config = Self::load(config.clone());
         let mut examination = Self {
-            examination_config: examination_config.clone(),
+            examination_config: ec.clone(),
             command_tx: None,
             config: config.clone(),
             list_state: Default::default(),
-            questions: QuestionEnum::load(config, examination_config),
+            questions: QuestionEnum::load(config, ec),
             question_tx,
             answer_rx,
             mode_holder: state_holder,
@@ -81,7 +88,7 @@ impl Examination {
         examination
     }
 
-    fn load(config: Config) -> ExaminationConfig {
+    pub(crate) fn load(config: Config) -> ExaminationConfig {
         let mut ec = String::new();
         File::open(config.config.data_dir.join("examination.json"))
             .unwrap()
