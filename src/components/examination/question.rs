@@ -14,6 +14,7 @@ use std::fs::File;
 use std::io::Read;
 use std::sync::LazyLock;
 use std::vec;
+use tracing::info;
 
 pub trait Question {
     fn convert_text(&self, state: State, q_index: usize) -> Text<'_>;
@@ -118,7 +119,7 @@ pub trait Question {
         match state {
             State::Ing => vec![
                 Span::styled(lang.parentheses().0.clone(), *DEFAULT_STYLE),
-                Span::styled(user_input, *DEFAULT_STYLE),
+                Span::styled(user_input, *ING_STYLE),
                 Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
             ],
             State::End => {
@@ -348,7 +349,9 @@ impl Question for SingleSelect {
     }
 
     fn answered(&self) -> bool {
-        self.user_input.is_some()
+        let x = self.user_input.is_some();
+        info!("singleSelect answered:{}", x);
+        x
     }
 }
 
@@ -391,7 +394,9 @@ impl Question for MultiSelect {
     }
 
     fn answered(&self) -> bool {
-        self.user_input.is_some()
+        let x = self.user_input.is_some();
+        info!("multiSelect answered:{}", x);
+        x
     }
 }
 
@@ -415,7 +420,9 @@ impl Question for Judge {
     }
 
     fn answered(&self) -> bool {
-        self.user_input.is_some()
+        let x = self.user_input.is_some();
+        info!("judge answered:{}", x);
+        x
     }
 }
 
@@ -516,7 +523,9 @@ impl Question for FillIn {
         unimplemented!("无需为填空题实现该方法")
     }
     fn answered(&self) -> bool {
-        self.items.iter().all(|item| item.user_input.is_some())
+        let x = self.items.iter().all(|item| item.user_input.is_some());
+        info!("fillIn answered:{}", x);
+        x
     }
 }
 

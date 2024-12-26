@@ -149,12 +149,12 @@ impl Component for Examination {
             Action::Submit => {
                 // 判断是否全部题目都已经做完，否则弹框提示
                 if self.questions.iter().all(|q| q.answered()) {
+                    self.handle_submit()
+                } else {
                     Ok(Some(Action::Alert(
                         "还有题目未做完，是否确认交卷？".to_string(),
                         ConfirmEvent::Submit,
                     )))
-                } else {
-                    self.handle_submit()
                 }
             }
             Action::Confirm(ConfirmEvent::Submit) => self.handle_submit(),
