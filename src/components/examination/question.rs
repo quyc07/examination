@@ -51,29 +51,28 @@ pub trait Question {
     }
 
     fn cal_score(&self) -> u16 {
-        if self.check_answer() {
-            self.score()
-        } else {
-            0
+        match self.user_input() {
+            None => 0,
+            Some(user_input) => {
+                if Self::check_answer(user_input, self.answer()) {
+                    self.score()
+                } else {
+                    0
+                }
+            }
         }
     }
 
-    fn check_answer(&self) -> bool {
-        match self.user_input() {
-            None => false,
-            Some(user_input) => {
-                let user_input_set = user_input
-                    .chars()
-                    .map(|c| c.to_lowercase().to_string())
-                    .collect::<HashSet<_>>();
-                let answer_set = self
-                    .answer()
-                    .chars()
-                    .map(|c| c.to_lowercase().to_string())
-                    .collect::<HashSet<_>>();
-                user_input_set == answer_set
-            }
-        }
+    fn check_answer(user_input: String, answer: String) -> bool {
+        let user_input_set = user_input
+            .chars()
+            .map(|c| c.to_lowercase().to_string())
+            .collect::<HashSet<_>>();
+        let answer_set = answer
+            .chars()
+            .map(|c| c.to_lowercase().to_string())
+            .collect::<HashSet<_>>();
+        user_input_set == answer_set
     }
 
     fn user_input(&self) -> Option<String>;
@@ -123,7 +122,7 @@ pub trait Question {
                 Span::styled(lang.parentheses().1, *DEFAULT_STYLE),
             ],
             State::End => {
-                if self.check_answer() {
+                if Self::check_answer(user_input.clone(), answer.clone()) {
                     vec![
                         Span::styled(lang.parentheses().0, *DEFAULT_STYLE),
                         Span::styled(user_input, *RIGHT_STYLE),
