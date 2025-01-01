@@ -1,97 +1,105 @@
-[
-  {
-    "SingleSelect": {
-      "question": "北京奥运会于（ ）年举办",
-      "options": [
-        "A: 1998",
-        "B: 2008",
-        "C: 2018",
-        "D: 2020"
-      ],
-      "answer": "B",
-      "score": 1
+{
+  "SingleSelect": [
+    {
+      "SingleSelect": {
+        "question": "北京奥运会于（ ）年举办",
+        "options": [
+          "A: 1998",
+          "B: 2008",
+          "C: 2018",
+          "D: 2020"
+        ],
+        "answer": "B",
+        "score": 1
+      }
+    },
+    {
+      "SingleSelect": {
+        "question": "北京冬奥会于（ ）年举办",
+        "options": [
+          "A: 1992",
+          "B: 2002",
+          "C: 2012",
+          "D: 2022"
+        ],
+        "answer": "D",
+        "score": 1
+      }
     }
-  },
-  {
-    "SingleSelect": {
-      "question": "北京冬奥会于（ ）年举办",
-      "options": [
-        "A: 1992",
-        "B: 2002",
-        "C: 2012",
-        "D: 2022"
-      ],
-      "answer": "D",
-      "score": 1
+  ],
+  "MultiSelect": [
+    {
+      "MultiSelect": {
+        "question": "下列哪些是奇数？（ ）",
+        "options": [
+          "A: 1",
+          "B: 2",
+          "C: 3",
+          "D: 4"
+        ],
+        "answer": "AC",
+        "score": 2
+      }
     }
-  },
-  {
-    "MultiSelect": {
-      "question": "下列哪些是奇数？（ ）",
-      "options": [
-        "A: 1",
-        "B: 2",
-        "C: 3",
-        "D: 4"
-      ],
-      "answer": "AC",
-      "score": 2
+  ],
+  "Judge": [
+    {
+      "Judge": {
+        "question": "太阳东升西落，对吗？（ ）",
+        "answer": "Yes",
+        "score": 1
+      }
     }
-  },
-  {
-    "Judge": {
-      "question": "太阳东升西落，对吗？（ ）",
-      "answer": "Yes",
-      "score": 1
+  ],
+  "FillIn": [
+    {
+      "FillIn": {
+        "question": "地球围绕（ ）公转。",
+        "items": [
+          {
+            "answer": "太阳",
+            "score": 1
+          }
+        ]
+      }
+    },
+    {
+      "FillIn": {
+        "question": "北京奥运会和冬奥会分别于（ ）年和（ ）年举行。",
+        "items": [
+          {
+            "answer": "2008",
+            "score": 1
+          },
+          {
+            "answer": "2022",
+            "score": 1
+          }
+        ]
+      }
+    },
+    {
+      "FillIn": {
+        "question": "中国四个直辖市分别是（），（），（），（）。",
+        "items": [
+          {
+            "answer": "北京",
+            "score": 1
+          },
+          {
+            "answer": "天津",
+            "score": 1
+          },
+          {
+            "answer": "上海",
+            "score": 1
+          },
+          {
+            "answer": "重庆",
+            "score": 1
+          }
+        ]
+      }
     }
-  },
-  {
-    "FillIn": {
-      "question": "地球围绕（ ）公转。",
-      "items": [
-        {
-          "answer": "太阳",
-          "score": 1
-        }
-      ]
-    }
-  },
-  {
-    "FillIn": {
-      "question": "北京奥运会和冬奥会分别于（ ）年和（ ）年举行。",
-      "items": [
-        {
-          "answer": "2008",
-          "score": 1
-        },
-        {
-          "answer": "2022",
-          "score": 1
-        }
-      ]
-    }
-  },
-  {
-    "FillIn": {
-      "question": "中国四个直辖市分别是（），（），（），（）。",
-      "items": [
-        {
-          "answer": "北京",
-          "score": 1
-        },
-        {
-          "answer": "天津",
-          "score": 1
-        },
-        {
-          "answer": "上海",
-          "score": 1
-        },
-        {
-          "answer": "重庆",
-          "score": 1
-        }
-      ]
-    }
-  }
-]
+  ]
+}

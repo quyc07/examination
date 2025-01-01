@@ -1,6 +1,6 @@
 [package]
 name = "examination"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2021"
 description = "simple examination"
 authors = ["quyc <quycsff@gmail.com>"]
@@ -42,9 +42,10 @@ tracing = "0.1.40"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "serde"] }
 regex = "1.11.1"
-itertools = "0.13.0"
+itertools = "0.14.0"
 rand = "0.8.5"
 chrono = "0.4.39"
+linked-hash-map = "0.5.6"
 [build-dependencies]
 anyhow = "1.0.90"
 vergen-gix = { version = "1.0.2", features = ["build", "cargo"] }
