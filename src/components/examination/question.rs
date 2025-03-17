@@ -1,8 +1,8 @@
 use crate::components::examination::{ExaminationConfig, QuestionEnum, QuestionType, State};
 use crate::config::Config;
 use linked_hash_map::LinkedHashMap;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::rng;
+use rand::seq::IndexedRandom;
 use ratatui::prelude::{Line, Text};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
@@ -233,7 +233,7 @@ impl QuestionEnum {
             .get(&question_type)
             .map(|v| {
                 let n = min(v.len(), question_size);
-                let mut rng = thread_rng();
+                let mut rng = rng();
                 v.choose_multiple(&mut rng, n).cloned().collect()
             })
             .unwrap_or_default()
