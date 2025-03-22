@@ -2,7 +2,7 @@ mod question;
 
 use super::Component;
 use crate::action::ConfirmEvent;
-use crate::app::{Mode, ModeHolder};
+use crate::app::{Mode, ModeHolder, ModeHolderLock};
 use crate::components::examination::question::{
     FillIn, Judge, MultiSelect, Question, SingleSelect,
 };
@@ -10,6 +10,7 @@ use crate::{action::Action, config::Config};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use linked_hash_map::LinkedHashMap;
+use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint::{Length, Min};
 use ratatui::layout::{Alignment, Layout, Rect};
@@ -17,7 +18,6 @@ use ratatui::style::palette::tailwind;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::*;
-use ratatui::Frame;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
@@ -33,7 +33,7 @@ pub struct Examination {
     questions: LinkedHashMap<QuestionType, Vec<QuestionEnum>>,
     question_tx: UnboundedSender<QuestionEnum>,
     answer_rx: UnboundedReceiver<QuestionEnum>,
-    mode_holder: Arc<Mutex<ModeHolder>>,
+    mode_holder: ModeHolderLock,
     score: Option<u16>,
     state: State,
     selected_tab: QuestionType,
@@ -166,7 +166,7 @@ impl Examination {
             questions: type_2_questions,
             question_tx,
             answer_rx,
-            mode_holder: state_holder,
+            mode_holder: ModeHolderLock(state_holder),
             score: None,
             state: State::Ing,
             selected_tab: question_type,
@@ -208,7 +208,7 @@ impl Examination {
     }
 
     fn handle_submit(&mut self) -> Result<Option<Action>> {
-        self.mode_holder.lock().unwrap().mode = Mode::Examination;
+        self.mode_holder.set_mode(Mode::Examination);
         // 计算得分
         let score = self.cal_score();
         self.score = Some(score);
@@ -254,7 +254,7 @@ impl Component for Examination {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        if self.mode_holder.lock().unwrap().mode == Mode::Examination {
+        if self.mode_holder.get_mode() == Mode::Examination {
             match key.code {
                 KeyCode::Down => self.list_state.select_next(),
                 KeyCode::Up => self.list_state.select_previous(),
@@ -263,7 +263,7 @@ impl Component for Examination {
                     let idx = self.list_state.selected().unwrap();
                     let current_questions = self.current_questions();
                     let q = current_questions.get(idx).unwrap();
-                    self.question_tx.send(q.clone()).unwrap();
+                    self.question_tx.send(q.clone())?;
                 }
                 KeyCode::Right => self.next_tab(),
                 KeyCode::Left => self.previous_tab(),
@@ -294,7 +294,7 @@ impl Component for Examination {
             Action::Confirm(ConfirmEvent::Submit) => self.handle_submit(),
             Action::Confirm(ConfirmEvent::Score) => {
                 self.state = State::End;
-                self.mode_holder.lock().unwrap().mode = Mode::Examination;
+                self.mode_holder.set_mode(Mode::Examination);
                 Ok(None)
             }
             _ => Ok(None),
@@ -313,7 +313,7 @@ impl Widget for &mut Examination {
         Self: Sized,
     {
         if let Ok(q) = self.answer_rx.try_recv() {
-            self.mode_holder.lock().unwrap().set_mode(Mode::Examination);
+            self.mode_holder.set_mode(Mode::Examination);
             let current_questions = self.questions.get_mut(&self.selected_tab).unwrap();
             current_questions[self.list_state.selected().unwrap()] = q;
         }

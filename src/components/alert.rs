@@ -1,21 +1,21 @@
 use crate::action::{Action, ConfirmEvent};
-use crate::app::{Mode, ModeHolder};
-use crate::components::area_util::centered_rect;
+use crate::app::{Mode, ModeHolder, ModeHolderLock};
 use crate::components::Component;
+use crate::components::area_util::centered_rect;
 use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
-use ratatui::Frame;
 use std::sync::{Arc, Mutex};
 
 pub struct Alert {
     /// alert message
     msg: String,
     /// 全局状态
-    mode_holder: Arc<Mutex<ModeHolder>>,
+    mode_holder: ModeHolderLock,
     /// 确认事件
     confirm_event: ConfirmEvent,
 }
@@ -25,7 +25,7 @@ impl Widget for &mut Alert {
     where
         Self: Sized,
     {
-        match self.get_state() {
+        match self.mode_holder.get_mode() {
             Mode::Examination => {}
             Mode::Input => {}
             Mode::Alert => {
@@ -58,7 +58,7 @@ impl Widget for &mut Alert {
 
 impl Component for Alert {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
-        match self.get_state() {
+        match self.mode_holder.get_mode() {
             Mode::Alert => match key.code {
                 KeyCode::Enter => Ok(Some(Action::Confirm(self.confirm_event.clone()))),
                 KeyCode::Esc => {
@@ -75,7 +75,7 @@ impl Component for Alert {
         if let Action::Alert(msg, confirm_event) = action {
             self.msg = msg;
             self.confirm_event = confirm_event;
-            self.mode_holder.lock().unwrap().mode = Mode::Alert
+            self.mode_holder.set_mode(Mode::Alert);
         }
         Ok(None)
     }
@@ -90,16 +90,12 @@ impl Alert {
     pub fn new(mode_holder: Arc<Mutex<ModeHolder>>) -> Self {
         Self {
             msg: String::new(),
-            mode_holder,
+            mode_holder: ModeHolderLock(mode_holder),
             confirm_event: ConfirmEvent::Nothing,
         }
     }
 
-    fn get_state(&self) -> Mode {
-        self.mode_holder.lock().unwrap().mode
-    }
-
     fn close(&mut self) {
-        self.mode_holder.lock().unwrap().mode = Mode::Examination;
+        self.mode_holder.set_mode(Mode::Examination);
     }
 }

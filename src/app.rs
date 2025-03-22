@@ -11,7 +11,7 @@ use crate::components::timer::Timer;
 use crate::components::user_input::UserInput;
 use crate::{
     action::Action,
-    components::{examination::Examination, Component},
+    components::{Component, examination::Examination},
     config::Config,
     tui::{Event, Tui},
 };
@@ -45,6 +45,18 @@ pub struct ModeHolder {
 impl ModeHolder {
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode;
+    }
+}
+
+pub struct ModeHolderLock(pub Arc<Mutex<ModeHolder>>);
+
+impl ModeHolderLock {
+    pub fn set_mode(&self, mode: Mode) {
+        self.0.lock().unwrap().set_mode(mode);
+    }
+
+    pub fn get_mode(&self) -> Mode {
+        self.0.lock().unwrap().mode
     }
 }
 

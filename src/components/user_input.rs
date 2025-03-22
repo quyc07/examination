@@ -1,14 +1,14 @@
 use crate::action::Action;
-use crate::app::{Mode, ModeHolder};
+use crate::app::{Mode, ModeHolder, ModeHolderLock};
+use crate::components::Component;
 use crate::components::area_util::centered_rect;
 use crate::components::examination::QuestionEnum;
-use crate::components::Component;
 use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Position, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
-use ratatui::Frame;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -26,7 +26,7 @@ pub struct UserInput {
     /// 答案
     answer_tx: UnboundedSender<QuestionEnum>,
     /// 全局状态
-    state_holder: Arc<Mutex<ModeHolder>>,
+    mode_holder: ModeHolderLock,
     /// 输入类型
     input_type: InputType,
     /// 输入框光标位置
@@ -45,7 +45,7 @@ impl Widget for &mut UserInput {
     where
         Self: Sized,
     {
-        match self.get_state() {
+        match self.mode_holder.get_mode() {
             Mode::Examination => {
                 if let Ok(q) = self.question_rx.try_recv() {
                     match q {
@@ -57,7 +57,7 @@ impl Widget for &mut UserInput {
                     self.input = q.user_input();
                     self.current_input_idx = Some(0);
                     self.question = Some(q);
-                    self.state_holder.lock().unwrap().set_mode(Mode::Input);
+                    self.mode_holder.set_mode(Mode::Input);
                 }
             }
 
@@ -76,7 +76,7 @@ impl Widget for &mut UserInput {
 
 impl Component for UserInput {
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
-        if self.get_state() == Mode::Input {
+        if self.mode_holder.get_mode() == Mode::Input {
             match self.input_type {
                 InputType::Fill => match key.code {
                     KeyCode::Tab => self.move_cursor_next(),
@@ -127,14 +127,10 @@ impl UserInput {
             character_index: 0,
             question_rx,
             answer_tx,
-            state_holder,
+            mode_holder: ModeHolderLock(state_holder),
             input_type: InputType::default(),
             cursor_position: None,
         }
-    }
-
-    fn get_state(&self) -> Mode {
-        self.state_holder.lock().unwrap().mode
     }
 
     fn move_cursor_left(&mut self) {
