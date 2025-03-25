@@ -2,7 +2,7 @@ mod question;
 
 use super::Component;
 use crate::action::ConfirmEvent;
-use crate::app::{Mode, ModeHolder, ModeHolderLock};
+use crate::app::{Mode, ModeHolderLock};
 use crate::components::examination::question::{
     FillIn, Judge, MultiSelect, Question, SingleSelect,
 };
@@ -21,7 +21,6 @@ use ratatui::widgets::*;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -148,7 +147,7 @@ impl Examination {
     pub fn new(
         question_tx: UnboundedSender<QuestionEnum>,
         answer_rx: UnboundedReceiver<QuestionEnum>,
-        state_holder: Arc<Mutex<ModeHolder>>,
+        state_holder: ModeHolderLock,
         config: Config,
         ec: ExaminationConfig,
     ) -> Self {
@@ -166,7 +165,7 @@ impl Examination {
             questions: type_2_questions,
             question_tx,
             answer_rx,
-            mode_holder: ModeHolderLock(state_holder),
+            mode_holder: state_holder,
             score: None,
             state: State::Ing,
             selected_tab: question_type,

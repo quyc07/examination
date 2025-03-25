@@ -1,5 +1,5 @@
 use crate::action::Action;
-use crate::app::{Mode, ModeHolder, ModeHolderLock};
+use crate::app::{Mode, ModeHolderLock};
 use crate::components::Component;
 use crate::components::area_util::centered_rect;
 use crate::components::examination::QuestionEnum;
@@ -9,7 +9,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Position, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
-use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 pub struct UserInput {
@@ -118,7 +117,7 @@ impl UserInput {
     pub fn new(
         question_rx: UnboundedReceiver<QuestionEnum>,
         answer_tx: UnboundedSender<QuestionEnum>,
-        state_holder: Arc<Mutex<ModeHolder>>,
+        state_holder: ModeHolderLock,
     ) -> Self {
         Self {
             input: vec![None],
@@ -127,7 +126,7 @@ impl UserInput {
             character_index: 0,
             question_rx,
             answer_tx,
-            mode_holder: ModeHolderLock(state_holder),
+            mode_holder: state_holder,
             input_type: InputType::default(),
             cursor_position: None,
         }
@@ -365,7 +364,7 @@ impl UserInput {
 
 #[cfg(test)]
 mod test {
-    use crate::app::ModeHolder;
+    use crate::app::{ModeHolder, ModeHolderLock};
     use crate::components::user_input::UserInput;
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc;
@@ -377,7 +376,7 @@ mod test {
         let mut input = UserInput::new(
             question_rx,
             answer_tx,
-            Arc::new(Mutex::new(ModeHolder::default())),
+            ModeHolderLock(Arc::new(Mutex::new(ModeHolder::default()))),
         );
         input.current_input_idx = Some(0);
         assert_eq!(input.byte_index(), 0)

@@ -23,7 +23,7 @@ pub struct App {
     components: Vec<Box<dyn Component>>,
     should_quit: bool,
     should_suspend: bool,
-    mode: Arc<Mutex<ModeHolder>>,
+    mode: ModeHolderLock,
     last_tick_key_events: Vec<KeyEvent>,
     action_tx: mpsc::UnboundedSender<Action>,
     action_rx: mpsc::UnboundedReceiver<Action>,
@@ -48,6 +48,7 @@ impl ModeHolder {
     }
 }
 
+#[derive(Clone)]
 pub struct ModeHolderLock(pub Arc<Mutex<ModeHolder>>);
 
 impl ModeHolderLock {
@@ -65,7 +66,7 @@ impl App {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         let (question_tx, question_rx) = mpsc::unbounded_channel();
         let (answer_tx, answer_rx) = mpsc::unbounded_channel();
-        let mode_holder = Arc::new(Mutex::new(ModeHolder::default()));
+        let mode_holder = ModeHolderLock(Arc::new(Mutex::new(ModeHolder::default())));
         let config = Config::new()?;
         let examination_config = Examination::load(config.clone());
         Ok(Self {
@@ -87,7 +88,7 @@ impl App {
             should_quit: false,
             should_suspend: false,
             config,
-            mode: mode_holder.clone(),
+            mode: mode_holder,
             last_tick_key_events: Vec::new(),
             action_tx,
             action_rx,
@@ -153,7 +154,7 @@ impl App {
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<()> {
         let action_tx = self.action_tx.clone();
-        let Some(keymap) = self.config.keybindings.get(&self.mode.lock().unwrap().mode) else {
+        let Some(keymap) = self.config.keybindings.get(&self.mode.get_mode()) else {
             return Ok(());
         };
         match keymap.get(&vec![key]) {

@@ -1,5 +1,5 @@
 use crate::action::{Action, ConfirmEvent};
-use crate::app::{Mode, ModeHolder, ModeHolderLock};
+use crate::app::{Mode, ModeHolderLock};
 use crate::components::Component;
 use crate::components::area_util::centered_rect;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -9,7 +9,6 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
-use std::sync::{Arc, Mutex};
 
 pub struct Alert {
     /// alert message
@@ -87,10 +86,10 @@ impl Component for Alert {
 }
 
 impl Alert {
-    pub fn new(mode_holder: Arc<Mutex<ModeHolder>>) -> Self {
+    pub fn new(mode_holder: ModeHolderLock) -> Self {
         Self {
             msg: String::new(),
-            mode_holder: ModeHolderLock(mode_holder),
+            mode_holder,
             confirm_event: ConfirmEvent::Nothing,
         }
     }
